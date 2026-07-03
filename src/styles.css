@@ -257,6 +257,19 @@ button {
   gap: 12px;
 }
 
+.schedule-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid rgba(126, 167, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(126, 167, 255, 0.08);
+  color: rgba(240, 244, 255, 0.88);
+  font-size: 0.9rem;
+}
+
 .match-list {
   display: grid;
   gap: 14px;

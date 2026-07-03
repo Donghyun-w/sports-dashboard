@@ -1,12 +1,38 @@
 import type { Match } from './types';
 
+function pad(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function buildSeedSchedule(offsetDays: number, hour: number, minute: number) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + offsetDays);
+  date.setHours(hour, minute, 0, 0);
+
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const startDate = `${year}-${month}-${day}T${pad(hour)}:${pad(minute)}:00+09:00`;
+
+  let startTime = `${month}월 ${day}일 ${pad(hour)}:${pad(minute)}`;
+  if (offsetDays === 0) startTime = `오늘 ${pad(hour)}:${pad(minute)}`;
+  if (offsetDays === -1) startTime = `어제 ${pad(hour)}:${pad(minute)}`;
+  if (offsetDays === 1) startTime = `내일 ${pad(hour)}:${pad(minute)}`;
+
+  let dateBucket: Match['dateBucket'] = 'TODAY';
+  if (offsetDays < 0) dateBucket = offsetDays === -1 ? 'YESTERDAY' : 'YESTERDAY';
+  if (offsetDays > 0) dateBucket = 'UPCOMING';
+
+  return { startDate, startTime, dateBucket };
+}
+
 export const initialMatches: Match[] = [
   {
     id: 1,
     league: 'NBA',
     status: 'LIVE',
-    dateBucket: 'TODAY',
-    startDate: '2026-06-30T20:30:00+09:00',
+    ...buildSeedSchedule(0, 20, 30),
     homeAbbr: 'LAL',
     awayAbbr: 'BOS',
     homeRecord: '49-27',
@@ -16,7 +42,6 @@ export const initialMatches: Match[] = [
     homeScore: 102,
     awayScore: 99,
     period: '4Q · 02:14',
-    startTime: '오늘 20:30',
     venue: 'Crypto.com Arena',
     headline: '접전 끝 승부처 돌입',
     summary: '레이커스가 4쿼터 막판 속공과 자유투로 3점 차 리드를 지키는 중입니다.',
@@ -33,8 +58,7 @@ export const initialMatches: Match[] = [
     id: 2,
     league: 'NFL',
     status: 'LIVE',
-    dateBucket: 'TODAY',
-    startDate: '2026-06-30T21:00:00+09:00',
+    ...buildSeedSchedule(0, 21, 0),
     homeAbbr: 'KC',
     awayAbbr: 'BUF',
     homeRecord: '10-3',
@@ -44,7 +68,6 @@ export const initialMatches: Match[] = [
     homeScore: 24,
     awayScore: 21,
     period: '4Q · 08:41',
-    startTime: '오늘 21:00',
     venue: 'Arrowhead Stadium',
     headline: '터치다운 공방 계속',
     summary: '치프스가 레드존 효율에서 앞서며 빌스와 치열한 공방전을 이어가고 있습니다.',
@@ -61,8 +84,7 @@ export const initialMatches: Match[] = [
     id: 3,
     league: 'NBA',
     status: 'FINAL',
-    dateBucket: 'TODAY',
-    startDate: '2026-06-30T17:00:00+09:00',
+    ...buildSeedSchedule(0, 17, 0),
     homeAbbr: 'GSW',
     awayAbbr: 'PHX',
     homeRecord: '46-30',
@@ -72,7 +94,6 @@ export const initialMatches: Match[] = [
     homeScore: 118,
     awayScore: 110,
     period: '경기 종료',
-    startTime: '오늘 17:00',
     venue: 'Chase Center',
     headline: '커리 34점 활약',
     summary: '워리어스가 3점슛 성공률 우위를 바탕으로 선즈를 제압했습니다.',
@@ -88,8 +109,7 @@ export const initialMatches: Match[] = [
     id: 4,
     league: 'NFL',
     status: 'UPCOMING',
-    dateBucket: 'UPCOMING',
-    startDate: '2026-07-01T09:20:00+09:00',
+    ...buildSeedSchedule(1, 9, 20),
     homeAbbr: 'SF',
     awayAbbr: 'PHI',
     homeRecord: '11-2',
@@ -99,7 +119,6 @@ export const initialMatches: Match[] = [
     homeScore: 0,
     awayScore: 0,
     period: '킥오프 대기',
-    startTime: '내일 09:20',
     venue: 'Levi\'s Stadium',
     headline: '프라임 매치업 예정',
     summary: '양 팀 모두 강한 수비를 앞세워 중요한 맞대결을 준비하고 있습니다.',
@@ -115,8 +134,7 @@ export const initialMatches: Match[] = [
     id: 5,
     league: 'NBA',
     status: 'FINAL',
-    dateBucket: 'YESTERDAY',
-    startDate: '2026-06-29T19:00:00+09:00',
+    ...buildSeedSchedule(-1, 19, 0),
     homeAbbr: 'NYK',
     awayAbbr: 'MIA',
     homeRecord: '45-31',
@@ -126,7 +144,6 @@ export const initialMatches: Match[] = [
     homeScore: 109,
     awayScore: 101,
     period: '경기 종료',
-    startTime: '어제 19:00',
     venue: 'Madison Square Garden',
     headline: '브런슨 29점으로 승부 마무리',
     summary: '닉스가 4쿼터 수비 집중력을 앞세워 홈에서 승리했습니다.',
@@ -142,8 +159,7 @@ export const initialMatches: Match[] = [
     id: 6,
     league: 'NFL',
     status: 'UPCOMING',
-    dateBucket: 'UPCOMING',
-    startDate: '2026-07-02T09:15:00+09:00',
+    ...buildSeedSchedule(2, 9, 15),
     homeAbbr: 'DAL',
     awayAbbr: 'GB',
     homeRecord: '8-5',
@@ -153,7 +169,6 @@ export const initialMatches: Match[] = [
     homeScore: 0,
     awayScore: 0,
     period: '킥오프 대기',
-    startTime: '7월 2일 09:15',
     venue: 'AT&T Stadium',
     headline: '공격 밸런스가 승부처',
     summary: '패커스와 카우보이스가 와일드카드 경쟁에 중요한 맞대결을 앞두고 있습니다.',
@@ -169,8 +184,7 @@ export const initialMatches: Match[] = [
     id: 7,
     league: 'KBO',
     status: 'LIVE',
-    dateBucket: 'TODAY',
-    startDate: '2026-06-30T18:30:00+09:00',
+    ...buildSeedSchedule(0, 18, 30),
     homeAbbr: 'LGT',
     awayAbbr: 'KIA',
     homeRecord: '43-29',
@@ -180,7 +194,6 @@ export const initialMatches: Match[] = [
     homeScore: 5,
     awayScore: 6,
     period: '8회초 · 1사',
-    startTime: '오늘 18:30',
     venue: 'Jamsil Baseball Stadium',
     headline: '선두권 맞대결, KIA 1점 차 리드',
     summary: 'KIA가 장타력으로 앞서고 있지만 LG가 후반 추격을 이어가고 있습니다.',
@@ -196,8 +209,7 @@ export const initialMatches: Match[] = [
     id: 8,
     league: 'KBO',
     status: 'FINAL',
-    dateBucket: 'TODAY',
-    startDate: '2026-06-30T18:30:00+09:00',
+    ...buildSeedSchedule(0, 18, 30),
     homeAbbr: 'SSG',
     awayAbbr: 'DSB',
     homeRecord: '38-34',
@@ -207,7 +219,6 @@ export const initialMatches: Match[] = [
     homeScore: 3,
     awayScore: 7,
     period: '경기 종료',
-    startTime: '오늘 18:30',
     venue: 'Incheon SSG Landers Field',
     headline: '두산, 원정에서 7득점 완승',
     summary: '두산이 중반 대량 득점에 성공하며 SSG를 상대로 승리를 챙겼습니다.',
@@ -223,8 +234,7 @@ export const initialMatches: Match[] = [
     id: 9,
     league: 'KBO',
     status: 'UPCOMING',
-    dateBucket: 'UPCOMING',
-    startDate: '2026-07-01T18:30:00+09:00',
+    ...buildSeedSchedule(1, 18, 30),
     homeAbbr: 'SAM',
     awayAbbr: 'LOT',
     homeRecord: '39-33',
@@ -234,7 +244,6 @@ export const initialMatches: Match[] = [
     homeScore: 0,
     awayScore: 0,
     period: '경기 시작 전',
-    startTime: '내일 18:30',
     venue: 'Daegu Samsung Lions Park',
     headline: '영남 라이벌전 예정',
     summary: '삼성과 롯데가 중요한 중위권 맞대결을 앞두고 있습니다.',
@@ -250,8 +259,7 @@ export const initialMatches: Match[] = [
     id: 10,
     league: 'KBO',
     status: 'FINAL',
-    dateBucket: 'YESTERDAY',
-    startDate: '2026-06-29T18:30:00+09:00',
+    ...buildSeedSchedule(-1, 18, 30),
     homeAbbr: 'HAN',
     awayAbbr: 'KIW',
     homeRecord: '37-35',
@@ -261,7 +269,6 @@ export const initialMatches: Match[] = [
     homeScore: 4,
     awayScore: 2,
     period: '경기 종료',
-    startTime: '어제 18:30',
     venue: 'Daejeon Hanwha Life Ballpark',
     headline: '한화, 불펜 지키며 2점 차 승리',
     summary: '한화가 후반 불펜 운영에 성공하며 키움을 제압했습니다.',
@@ -277,8 +284,7 @@ export const initialMatches: Match[] = [
     id: 11,
     league: 'KBO',
     status: 'UPCOMING',
-    dateBucket: 'UPCOMING',
-    startDate: '2026-07-01T18:30:00+09:00',
+    ...buildSeedSchedule(1, 18, 30),
     homeAbbr: 'KTW',
     awayAbbr: 'NCD',
     homeRecord: '35-36',
@@ -288,7 +294,6 @@ export const initialMatches: Match[] = [
     homeScore: 0,
     awayScore: 0,
     period: '경기 시작 전',
-    startTime: '내일 18:30',
     venue: 'Suwon KT Wiz Park',
     headline: 'KT와 NC, 반등 노리는 맞대결',
     summary: '두 팀 모두 5할 복귀를 위해 중요한 경기입니다.',

@@ -80,13 +80,33 @@ function App() {
     window.localStorage.setItem(favoriteStorageKey, JSON.stringify(favoriteTeams));
   }, [favoriteTeams]);
 
+  useEffect(() => {
+    if (!scheduleTeamKey) {
+      return;
+    }
+
+    const scopedTeam = getTeamByKey(scheduleTeamKey);
+    if (scopedTeam && leagueFilter !== 'ALL' && scopedTeam.league !== leagueFilter) {
+      setScheduleTeamKey(null);
+    }
+  }, [leagueFilter, scheduleTeamKey]);
+
+  const kboReferenceDate = useMemo(() => {
+    const kboMatches = apiState.matches
+      .filter((match) => match.league === 'KBO' && match.startDate)
+      .sort(sortByDateAsc);
+
+    return kboMatches[0]?.startDate ?? new Date().toISOString();
+  }, [apiState.matches]);
+
   const filteredMatches = useMemo(() => {
     const scopedTeam = scheduleTeamKey ? getTeamByKey(scheduleTeamKey) : null;
 
     return apiState.matches
       .filter((match) => {
         const leagueOk = leagueFilter === 'ALL' || match.league === leagueFilter;
-        const dateOk = resolveMatchBucket(match) === dateFilter;
+        const dateOk =
+          (match.league === 'KBO' ? resolveKboBucket(match, kboReferenceDate) : resolveMatchBucket(match)) === dateFilter;
         const teamOk = scopedTeam
           ? match.homeAbbr === scopedTeam.abbr || match.awayAbbr === scopedTeam.abbr
           : true;
@@ -102,7 +122,7 @@ function App() {
 
         return left.id - right.id;
       });
-  }, [apiState.matches, dateFilter, favoriteTeams, leagueFilter, scheduleTeamKey]);
+  }, [apiState.matches, dateFilter, favoriteTeams, kboReferenceDate, leagueFilter, scheduleTeamKey]);
 
   const leagueMatches = useMemo(() => {
     return apiState.matches.filter((match) => leagueFilter === 'ALL' || match.league === leagueFilter);
@@ -177,18 +197,26 @@ function App() {
       (match) => match.homeAbbr === selectedTeam.abbr || match.awayAbbr === selectedTeam.abbr,
     );
 
+    const referenceDate = selectedTeam.league === 'KBO' ? kboReferenceDate : new Date().toISOString();
+
     const recent = related
-      .filter((match) => match.status !== 'UPCOMING')
+      .filter((match) => {
+        const diff = getDayDiff(match.startDate, referenceDate);
+        return diff >= -5 && diff <= 0;
+      })
       .sort(sortByDateDesc)
-      .slice(0, 7);
+      .slice(0, 5);
 
     const upcoming = related
-      .filter((match) => match.status === 'UPCOMING')
+      .filter((match) => {
+        const diff = getDayDiff(match.startDate, referenceDate);
+        return diff >= 1 && diff <= 5;
+      })
       .sort(sortByDateAsc)
-      .slice(0, 7);
+      .slice(0, 5);
 
     return { recent, upcoming };
-  }, [leagueMatches, selectedTeam]);
+  }, [kboReferenceDate, leagueMatches, selectedTeam]);
 
   useEffect(() => {
     if (!selectedTeam) {
@@ -417,6 +445,12 @@ function App() {
             <div>
               <p className="section-label">Schedule</p>
               <h2>{scopedScheduleTeam ? `${scopedScheduleTeam.name} · ${dateFilterLabel[dateFilter]}` : dateFilterLabel[dateFilter]}</h2>
+              {scopedScheduleTeam ? (
+                <div className="schedule-scope">
+                  <TeamEmblem team={scopedScheduleTeam.name} abbr={scopedScheduleTeam.abbr} league={scopedScheduleTeam.league} size="sm" />
+                  <span>{scopedScheduleTeam.name} only</span>
+                </div>
+              ) : null}
             </div>
             <span className="match-count">{filteredMatches.length} games</span>
           </div>
@@ -620,10 +654,10 @@ function App() {
           <>
             <div className="team-view-tabs">
               <button className={teamViewTab === 'recent' ? 'active' : ''} onClick={() => setTeamViewTab('recent')}>
-                Recent 7
+                Prev 5 Days
               </button>
               <button className={teamViewTab === 'upcoming' ? 'active' : ''} onClick={() => setTeamViewTab('upcoming')}>
-                Upcoming 7
+                Next 5 Days
               </button>
               <button className={teamViewTab === 'news' ? 'active' : ''} onClick={() => setTeamViewTab('news')}>
                 Team News
@@ -840,6 +874,24 @@ function resolveMatchBucket(match: Match): ScheduleBucket {
   }
 
   return inferDateBucket(match);
+}
+
+function resolveKboBucket(match: Match, referenceDate: string): ScheduleBucket {
+  const diff = getDayDiff(match.startDate, referenceDate);
+  if (diff <= -1) return 'YESTERDAY';
+  if (diff >= 1) return 'UPCOMING';
+  return 'TODAY';
+}
+
+function getDayDiff(matchDate?: string, referenceDate?: string) {
+  if (!matchDate || !referenceDate) {
+    return 0;
+  }
+
+  const target = new Date(toSeoulDayKey(matchDate));
+  const anchor = new Date(toSeoulDayKey(referenceDate));
+  const millisPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((target.getTime() - anchor.getTime()) / millisPerDay);
 }
 
 function toSeoulDayKey(dateString: string) {

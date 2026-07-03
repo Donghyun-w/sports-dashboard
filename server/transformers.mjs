@@ -101,6 +101,18 @@ function sortMatches(a, b) {
   return a.id - b.id;
 }
 
+function dayDiffFromToday(dateString) {
+  const target = new Date(toSeoulDayKey(dateString));
+  const today = new Date(toSeoulDayKey(new Date().toISOString()));
+  const millisPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((target.getTime() - today.getTime()) / millisPerDay);
+}
+
+function isScheduleWindow(dateString) {
+  const diff = dayDiffFromToday(dateString);
+  return diff >= -1 && diff <= 7;
+}
+
 export function transformNbaGames(payload) {
   return payload.data
     .map((game) => ({
@@ -134,6 +146,7 @@ export function transformNbaGames(payload) {
       ],
       lastUpdated: relativeUpdatedAt(),
     }))
+    .filter((game) => isScheduleWindow(game.startDate))
     .sort(sortMatches);
 }
 
@@ -164,5 +177,6 @@ export function transformNflGames(payload) {
       ],
       lastUpdated: relativeUpdatedAt(),
     }))
+    .filter((game) => isScheduleWindow(game.startDate))
     .sort(sortMatches);
 }

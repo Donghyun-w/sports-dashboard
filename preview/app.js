@@ -1,13 +1,40 @@
 import { allTeams, getLeagueTeams, getTeamByAbbr, getTeamByKey } from './teamCatalog.js?v=20260703-2006';
 
+function pad(value) {
+  return String(value).padStart(2, '0');
+}
+
+function buildSeedSchedule(offsetDays, hour, minute) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + offsetDays);
+  date.setHours(hour, minute, 0, 0);
+
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const startDate = `${year}-${month}-${day}T${pad(hour)}:${pad(minute)}:00+09:00`;
+
+  let startTime = `${month}월 ${day}일 ${pad(hour)}:${pad(minute)}`;
+  if (offsetDays === 0) startTime = `오늘 ${pad(hour)}:${pad(minute)}`;
+  if (offsetDays === -1) startTime = `어제 ${pad(hour)}:${pad(minute)}`;
+  if (offsetDays === 1) startTime = `내일 ${pad(hour)}:${pad(minute)}`;
+
+  let bucket = 'TODAY';
+  if (offsetDays < 0) bucket = 'YESTERDAY';
+  if (offsetDays > 0) bucket = 'UPCOMING';
+
+  return { startDate, startTime, bucket };
+}
+
 const initialMatches = [
-  { id: 1, league: 'NBA', bucket: 'TODAY', status: 'LIVE', awayTeam: 'Boston Celtics', awayAbbr: 'BOS', awayScore: 99, awayRecord: '55-21', homeTeam: 'Los Angeles Lakers', homeAbbr: 'LAL', homeScore: 102, homeRecord: '49-27', headline: '접전 끝 승부처 돌입', period: '4Q · 02:14', venue: 'Crypto.com Arena', startTime: '오늘 20:30', stats: [{ label: '리바운드', away: 40, home: 44 }, { label: '3점 성공', away: 13, home: 14 }, { label: '턴오버', away: 11, home: 9 }], play: ['2:14 레이커스 자유투 2개 성공', '3:02 테이텀 3점 성공', '4:15 르브론 속공 덩크'] },
-  { id: 2, league: 'NFL', bucket: 'TODAY', status: 'LIVE', awayTeam: 'Buffalo Bills', awayAbbr: 'BUF', awayScore: 21, awayRecord: '9-4', homeTeam: 'Kansas City Chiefs', homeAbbr: 'KC', homeScore: 24, homeRecord: '10-3', headline: '터치다운 공방 계속', period: '4Q · 08:41', venue: 'Arrowhead Stadium', startTime: '오늘 21:00', stats: [{ label: '패싱 야드', away: 271, home: 286 }, { label: '러싱 야드', away: 88, home: 97 }, { label: '턴오버', away: 1, home: 0 }], play: ['08:41 치프스 필드골 성공', '10:12 빌스 터치다운 드라이브', '12:55 치프스 인터셉션 유도'] },
-  { id: 3, league: 'NBA', bucket: 'TODAY', status: 'FINAL', awayTeam: 'Phoenix Suns', awayAbbr: 'PHX', awayScore: 110, awayRecord: '43-33', homeTeam: 'Golden State Warriors', homeAbbr: 'GSW', homeScore: 118, homeRecord: '46-30', headline: '커리 34점 활약', period: 'Final', venue: 'Chase Center', startTime: '오늘 17:00', stats: [{ label: '3점 성공', away: 12, home: 19 }, { label: '어시스트', away: 24, home: 31 }, { label: '자유투', away: 18, home: 15 }], play: ['4Q 종료 워리어스 승리 확정', '1:22 커리 3점 성공', '2:01 듀란트 점퍼 성공'] },
-  { id: 7, league: 'KBO', bucket: 'TODAY', status: 'LIVE', awayTeam: 'KIA Tigers', awayAbbr: 'KIA', awayScore: 6, awayRecord: '45-27', homeTeam: 'LG Twins', homeAbbr: 'LGT', homeScore: 5, homeRecord: '43-29', headline: '선두권 맞대결, KIA 1점 차 리드', period: '8회초 · 1사', venue: 'Jamsil Baseball Stadium', startTime: '오늘 18:30', stats: [{ label: '안타', away: 9, home: 8 }, { label: '홈런', away: 2, home: 1 }, { label: '볼넷', away: 4, home: 3 }], play: ['8회초 KIA 적시 2루타', '7회말 LG 희생플라이 득점', '5회초 KIA 투런 홈런'] },
-  { id: 8, league: 'KBO', bucket: 'TODAY', status: 'FINAL', awayTeam: 'Doosan Bears', awayAbbr: 'DSB', awayScore: 7, awayRecord: '36-37', homeTeam: 'SSG Landers', homeAbbr: 'SSG', homeScore: 3, homeRecord: '38-34', headline: '두산, 원정에서 7득점 완승', period: 'Final', venue: 'Incheon SSG Landers Field', startTime: '오늘 18:30', stats: [{ label: '안타', away: 11, home: 6 }, { label: '실책', away: 0, home: 2 }, { label: '잔루', away: 7, home: 5 }], play: ['7회초 두산 3점 추가', '4회초 두산 적시타 2개', '9회말 SSG 마지막 타자 삼진'] },
-  { id: 9, league: 'KBO', bucket: 'UPCOMING', status: 'UPCOMING', awayTeam: 'Lotte Giants', awayAbbr: 'LOT', awayScore: 0, awayRecord: '34-38', homeTeam: 'Samsung Lions', homeAbbr: 'SAM', homeScore: 0, homeRecord: '39-33', headline: '영남 라이벌전 예정', period: '내일 18:30', venue: 'Daegu Samsung Lions Park', startTime: '내일 18:30', stats: [{ label: '선발 매치업', text: '원태인 vs 반즈' }, { label: '최근 10경기', text: '6승 4패 - 4승 6패' }, { label: '관전 포인트', text: '초반 선취점' }], play: ['라인업 발표 전입니다.'] },
-  { id: 10, league: 'KBO', bucket: 'YESTERDAY', status: 'FINAL', awayTeam: 'Kiwoom Heroes', awayAbbr: 'KIW', awayScore: 2, awayRecord: '30-42', homeTeam: 'Hanwha Eagles', homeAbbr: 'HAN', homeScore: 4, homeRecord: '37-35', headline: '한화, 불펜 지키며 2점 차 승리', period: 'Final', venue: 'Daejeon Hanwha Life Ballpark', startTime: '어제 18:30', stats: [{ label: '안타', away: 8, home: 5 }, { label: '볼넷', away: 2, home: 4 }, { label: '도루', away: 1, home: 0 }], play: ['8회말 한화 결승타', '9회초 마무리 삼자범퇴'] },
+  { id: 1, league: 'NBA', status: 'LIVE', ...buildSeedSchedule(0, 20, 30), awayTeam: 'Boston Celtics', awayAbbr: 'BOS', awayScore: 99, awayRecord: '55-21', homeTeam: 'Los Angeles Lakers', homeAbbr: 'LAL', homeScore: 102, homeRecord: '49-27', headline: '접전 끝 승부처 돌입', period: '4Q · 02:14', venue: 'Crypto.com Arena', stats: [{ label: '리바운드', away: 40, home: 44 }, { label: '3점 성공', away: 13, home: 14 }, { label: '턴오버', away: 11, home: 9 }], play: ['2:14 레이커스 자유투 2개 성공', '3:02 테이텀 3점 성공', '4:15 르브론 속공 덩크'] },
+  { id: 2, league: 'NFL', status: 'LIVE', ...buildSeedSchedule(0, 21, 0), awayTeam: 'Buffalo Bills', awayAbbr: 'BUF', awayScore: 21, awayRecord: '9-4', homeTeam: 'Kansas City Chiefs', homeAbbr: 'KC', homeScore: 24, homeRecord: '10-3', headline: '터치다운 공방 계속', period: '4Q · 08:41', venue: 'Arrowhead Stadium', stats: [{ label: '패싱 야드', away: 271, home: 286 }, { label: '러싱 야드', away: 88, home: 97 }, { label: '턴오버', away: 1, home: 0 }], play: ['08:41 치프스 필드골 성공', '10:12 빌스 터치다운 드라이브', '12:55 치프스 인터셉션 유도'] },
+  { id: 3, league: 'NBA', status: 'FINAL', ...buildSeedSchedule(0, 17, 0), awayTeam: 'Phoenix Suns', awayAbbr: 'PHX', awayScore: 110, awayRecord: '43-33', homeTeam: 'Golden State Warriors', homeAbbr: 'GSW', homeScore: 118, homeRecord: '46-30', headline: '커리 34점 활약', period: 'Final', venue: 'Chase Center', stats: [{ label: '3점 성공', away: 12, home: 19 }, { label: '어시스트', away: 24, home: 31 }, { label: '자유투', away: 18, home: 15 }], play: ['4Q 종료 워리어스 승리 확정', '1:22 커리 3점 성공', '2:01 듀란트 점퍼 성공'] },
+  { id: 7, league: 'KBO', status: 'LIVE', ...buildSeedSchedule(0, 18, 30), awayTeam: 'KIA Tigers', awayAbbr: 'KIA', awayScore: 6, awayRecord: '45-27', homeTeam: 'LG Twins', homeAbbr: 'LGT', homeScore: 5, homeRecord: '43-29', headline: '선두권 맞대결, KIA 1점 차 리드', period: '8회초 · 1사', venue: 'Jamsil Baseball Stadium', stats: [{ label: '안타', away: 9, home: 8 }, { label: '홈런', away: 2, home: 1 }, { label: '볼넷', away: 4, home: 3 }], play: ['8회초 KIA 적시 2루타', '7회말 LG 희생플라이 득점', '5회초 KIA 투런 홈런'] },
+  { id: 8, league: 'KBO', status: 'FINAL', ...buildSeedSchedule(0, 18, 30), awayTeam: 'Doosan Bears', awayAbbr: 'DSB', awayScore: 7, awayRecord: '36-37', homeTeam: 'SSG Landers', homeAbbr: 'SSG', homeScore: 3, homeRecord: '38-34', headline: '두산, 원정에서 7득점 완승', period: 'Final', venue: 'Incheon SSG Landers Field', stats: [{ label: '안타', away: 11, home: 6 }, { label: '실책', away: 0, home: 2 }, { label: '잔루', away: 7, home: 5 }], play: ['7회초 두산 3점 추가', '4회초 두산 적시타 2개', '9회말 SSG 마지막 타자 삼진'] },
+  { id: 9, league: 'KBO', status: 'UPCOMING', ...buildSeedSchedule(1, 18, 30), awayTeam: 'Lotte Giants', awayAbbr: 'LOT', awayScore: 0, awayRecord: '34-38', homeTeam: 'Samsung Lions', homeAbbr: 'SAM', homeScore: 0, homeRecord: '39-33', headline: '영남 라이벌전 예정', period: '내일 18:30', venue: 'Daegu Samsung Lions Park', stats: [{ label: '선발 매치업', text: '원태인 vs 반즈' }, { label: '최근 10경기', text: '6승 4패 - 4승 6패' }, { label: '관전 포인트', text: '초반 선취점' }], play: ['라인업 발표 전입니다.'] },
+  { id: 10, league: 'KBO', status: 'FINAL', ...buildSeedSchedule(-1, 18, 30), awayTeam: 'Kiwoom Heroes', awayAbbr: 'KIW', awayScore: 2, awayRecord: '30-42', homeTeam: 'Hanwha Eagles', homeAbbr: 'HAN', homeScore: 4, homeRecord: '37-35', headline: '한화, 불펜 지키며 2점 차 승리', period: 'Final', venue: 'Daejeon Hanwha Life Ballpark', stats: [{ label: '안타', away: 8, home: 5 }, { label: '볼넷', away: 2, home: 4 }, { label: '도루', away: 1, home: 0 }], play: ['8회말 한화 결승타', '9회초 마무리 삼자범퇴'] },
 ];
 
 const bucketLabels = { YESTERDAY: 'Yesterday', TODAY: 'Today', UPCOMING: 'Upcoming' };
@@ -48,10 +75,11 @@ function logo(abbr, league) {
 
 function filtered() {
   const scopedTeam = state.scheduleTeam ? getTeamByKey(state.scheduleTeam) : null;
+  const kboReferenceDate = getKboReferenceDate();
   return matches
     .filter((m) => {
       const leagueOk = state.league === 'ALL' || m.league === state.league;
-      const bucketOk = resolveBucket(m) === state.bucket;
+      const bucketOk = (m.league === 'KBO' ? resolveKboBucket(m, kboReferenceDate) : resolveBucket(m)) === state.bucket;
       const teamOk = scopedTeam ? m.homeAbbr === scopedTeam.abbr || m.awayAbbr === scopedTeam.abbr : true;
       return leagueOk && bucketOk && teamOk;
     })
@@ -96,9 +124,10 @@ function selectedTeamGames() {
   const team = selectedTeamProfile();
   if (!team) return { recent: [], upcoming: [] };
   const related = leagueMatches().filter((m) => m.homeAbbr === team.abbr || m.awayAbbr === team.abbr);
+  const referenceDate = team.league === 'KBO' ? getKboReferenceDate() : new Date().toISOString();
   return {
-    recent: related.filter((m) => m.status !== 'UPCOMING').slice(0, 7),
-    upcoming: related.filter((m) => m.status === 'UPCOMING').slice(0, 7),
+    recent: related.filter((m) => getDayDiff(m.startDate, referenceDate) >= -5 && getDayDiff(m.startDate, referenceDate) <= 0).sort((a, b) => (Date.parse(b.startDate || '') || 0) - (Date.parse(a.startDate || '') || 0)).slice(0, 5),
+    upcoming: related.filter((m) => getDayDiff(m.startDate, referenceDate) >= 1 && getDayDiff(m.startDate, referenceDate) <= 5).sort((a, b) => (Date.parse(a.startDate || '') || 0) - (Date.parse(b.startDate || '') || 0)).slice(0, 5),
   };
 }
 
@@ -140,6 +169,25 @@ function resolveBucket(match) {
     return target > today ? 'UPCOMING' : 'YESTERDAY';
   }
   return inferDateBucket(match);
+}
+
+function getKboReferenceDate() {
+  const kboMatches = matches.filter((match) => match.league === 'KBO' && match.startDate).sort((a, b) => (Date.parse(a.startDate || '') || 0) - (Date.parse(b.startDate || '') || 0));
+  return kboMatches[0]?.startDate || new Date().toISOString();
+}
+
+function resolveKboBucket(match, referenceDate) {
+  const diff = getDayDiff(match.startDate, referenceDate);
+  if (diff <= -1) return 'YESTERDAY';
+  if (diff >= 1) return 'UPCOMING';
+  return 'TODAY';
+}
+
+function getDayDiff(matchDate, referenceDate) {
+  if (!matchDate || !referenceDate) return 0;
+  const target = new Date(toSeoulDayKey(matchDate));
+  const anchor = new Date(toSeoulDayKey(referenceDate));
+  return Math.round((target.getTime() - anchor.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 function toSeoulDayKey(dateString) {
@@ -264,6 +312,10 @@ function render() {
   const visibleTeams = visibleTeamProfiles();
   if (!teams.find((team) => team.key === state.selectedTeam)) state.selectedTeam = teams[0]?.key || '';
   if (visibleTeams.length && !visibleTeams.find((team) => team.key === state.selectedTeam)) state.selectedTeam = visibleTeams[0]?.key || state.selectedTeam;
+  if (state.scheduleTeam) {
+    const scoped = getTeamByKey(state.scheduleTeam);
+    if (scoped && state.league !== 'ALL' && scoped.league !== state.league) state.scheduleTeam = null;
+  }
   const team = selectedTeamProfile();
   const teamGames = selectedTeamGames();
   const scopedScheduleTeam = state.scheduleTeam ? getTeamByKey(state.scheduleTeam) : null;
@@ -302,7 +354,7 @@ function render() {
       </section>
       <section class="board-layout">
         <aside class="schedule-panel">
-          <div class="panel-header"><div><p class="section-label">Schedule</p><h2>${scopedScheduleTeam ? `${scopedScheduleTeam.name} · ${bucketLabels[state.bucket]}` : bucketLabels[state.bucket]}</h2></div><span class="match-count">${list.length} games</span></div>
+          <div class="panel-header"><div><p class="section-label">Schedule</p><h2>${scopedScheduleTeam ? `${scopedScheduleTeam.name} · ${bucketLabels[state.bucket]}` : bucketLabels[state.bucket]}</h2>${scopedScheduleTeam ? `<div class="schedule-scope"><img class="team-emblem sm team-emblem-image" src="${logo(scopedScheduleTeam.abbr, scopedScheduleTeam.league)}" alt="${scopedScheduleTeam.name}" onerror="this.src='${fallbackLogo(scopedScheduleTeam.abbr, scopedScheduleTeam.league)}'" /><span>${scopedScheduleTeam.name} only</span></div>` : ''}</div><span class="match-count">${list.length} games</span></div>
           ${scopedScheduleTeam ? `<div class="schedule-tabs"><button class="schedule-tab active" data-clear-team="1">All Teams</button></div>` : ''}
           <div class="schedule-tabs">${Object.keys(bucketLabels).map((b) => `<button class="schedule-tab ${state.bucket === b ? 'active' : ''}" data-bucket="${b}">${bucketLabels[b]}</button>`).join('')}</div>
           <div class="match-list">${list.map((m) => `<article class="match-row ${state.selected === m.id ? 'selected' : ''}" data-open="${m.id}" tabindex="0"><div class="row-top"><span class="badge ${m.status.toLowerCase()}">${m.status === 'FINAL' ? 'Final' : m.period}</span><div class="row-top-right">${state.favorites.includes(m.awayAbbr) || state.favorites.includes(m.homeAbbr) ? '<span class="favorite-mark">★</span>' : ''}<span class="league-badge">${m.league}</span></div></div><div class="row-main">${teamBlock(m, 'away')}<div class="center-score"><strong>${m.awayScore}</strong><span>:</span><strong>${m.homeScore}</strong></div>${teamBlock(m, 'home')}</div><div class="row-foot"><span>${m.venue}</span><span>${m.startTime}</span></div></article>`).join('') || '<div class="empty-card">선택한 조건에 맞는 경기가 없습니다.</div>'}</div>
@@ -314,7 +366,7 @@ function render() {
       <section class="team-center">
         <div class="panel-header"><div><p class="section-label">Team Center</p><h2>${team ? team.name : 'Select Team'}</h2></div><span class="match-count">${team ? `${team.league} · ${teamGames.recent.length} recent / ${teamGames.upcoming.length} upcoming` : ''}</span></div>
         <div class="team-tabs">${visibleTeams.map((item) => `<button class="team-tab ${state.selectedTeam === item.key ? 'active' : ''}" data-team="${item.key}"><img class="team-emblem sm team-emblem-image" src="${logo(item.abbr, item.league)}" alt="${item.name}" onerror="this.src='${fallbackLogo(item.abbr, item.league)}'" /><span>${item.abbr}</span></button>`).join('')}</div>
-        <div class="team-view-tabs"><button class="${state.teamTab === 'recent' ? 'active' : ''}" data-team-view="recent">Recent 7</button><button class="${state.teamTab === 'upcoming' ? 'active' : ''}" data-team-view="upcoming">Upcoming 7</button><button class="${state.teamTab === 'news' ? 'active' : ''}" data-team-view="news">Team News</button></div>
+        <div class="team-view-tabs"><button class="${state.teamTab === 'recent' ? 'active' : ''}" data-team-view="recent">Prev 5 Days</button><button class="${state.teamTab === 'upcoming' ? 'active' : ''}" data-team-view="upcoming">Next 5 Days</button><button class="${state.teamTab === 'news' ? 'active' : ''}" data-team-view="news">Team News</button></div>
         ${state.teamTab === 'recent' ? `<section class="team-view-grid">${teamGames.recent.length ? teamGames.recent.map((item) => teamGameCard(item, team.abbr)).join('') : '<div class="empty-card">최근 경기 데이터가 없습니다.</div>'}</section>` : ''}
         ${state.teamTab === 'upcoming' ? `<section class="team-view-grid">${teamGames.upcoming.length ? teamGames.upcoming.map((item) => teamGameCard(item, team.abbr)).join('') : '<div class="empty-card">예정 경기 데이터가 없습니다.</div>'}</section>` : ''}
         ${state.teamTab === 'news' ? `<section class="news-list">${state.teamNews.loading ? '<div class="empty-card">뉴스를 불러오는 중입니다.</div>' : ''}${!state.teamNews.loading && state.teamNews.articles.length === 0 ? `<div class="empty-card">${state.teamNews.message || '표시할 뉴스가 없습니다.'}</div>` : ''}${state.teamNews.articles.map((article) => `<a class="news-card" href="${article.link}" target="_blank" rel="noreferrer"><span class="news-source">${article.source || team.name}</span><h3>${article.title}</h3><p>${article.pubDate}</p></a>`).join('')}</section>` : ''}

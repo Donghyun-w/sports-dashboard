@@ -33,12 +33,15 @@ async function handleScoreboard(response) {
     const settled = await Promise.allSettled(tasks);
     const matches = settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
     const hasBallDontLie = API_KEY && settled[0]?.status === 'fulfilled';
+    const hasBallDontLieMatches = matches.some((match) => match.league === 'NBA' || match.league === 'NFL');
     const hasKbo = settled.some((result) => result.status === 'fulfilled' && result.value.some((match) => match.league === 'KBO'));
     const failures = settled.filter((result) => result.status === 'rejected');
     const messageParts = [];
 
-    if (hasBallDontLie) {
+    if (hasBallDontLieMatches) {
       messageParts.push('NBA/NFL 실데이터 연결 완료');
+    } else if (hasBallDontLie) {
+      messageParts.push('NBA/NFL 현재 일정 없음');
     } else if (!API_KEY) {
       messageParts.push('NBA/NFL은 API 키가 없어 데모를 사용 중');
     }
