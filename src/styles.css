@@ -236,7 +236,7 @@ button {
 
 .board-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 0.88fr) minmax(480px, 1.12fr);
+  grid-template-columns: minmax(0, 4fr) minmax(360px, 6fr);
   gap: 18px;
   align-items: start;
 }
@@ -286,6 +286,7 @@ button {
   text-align: left;
   cursor: pointer;
   overflow: hidden;
+  min-width: 0;
 }
 
 .match-row.selected {
@@ -301,17 +302,19 @@ button {
 
 .row-main {
   margin: 14px 0;
-  gap: 8px;
+  gap: 12px;
   display: grid;
-  grid-template-columns: minmax(112px, 1fr) auto minmax(112px, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   width: 100%;
   min-width: 0;
 }
 
 .match-team {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
   gap: 10px;
-  flex: 1;
   min-width: 0;
   max-width: 100%;
 }
@@ -378,6 +381,7 @@ button {
   gap: 6px;
   font-weight: 800;
   min-width: 0;
+  flex: none;
 }
 
 .center-score strong {
@@ -422,6 +426,7 @@ button {
   position: sticky;
   top: 20px;
   min-height: 760px;
+  max-width: 100%;
 }
 
 .score-hero {

@@ -15,6 +15,12 @@ const TEAM_MAP = {
 
 const TEAM_KEYS = Object.keys(TEAM_MAP);
 const EXCLUDED_STATUS_PATTERN = /취소|서스펜디드/;
+const KBO_RANGE_OFFSETS = Array.from({ length: 11 }, (_, index) => index - 5);
+const KBO_CACHE_TTL_MS = 60 * 1000;
+let kboCache = {
+  expiresAt: 0,
+  matches: [],
+};
 
 function decodeHtml(text) {
   return text
@@ -51,6 +57,19 @@ function toSeoulDate(date = new Date()) {
   }).format(date);
 }
 
+function toCompactDateKey(date = new Date()) {
+  return toSeoulDate(date).replaceAll('-', '');
+}
+
+function shiftCompactDateKey(dateKey, offsetDays) {
+  const year = Number(dateKey.slice(0, 4));
+  const month = Number(dateKey.slice(4, 6));
+  const day = Number(dateKey.slice(6, 8));
+  const anchor = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T12:00:00+09:00`);
+  anchor.setDate(anchor.getDate() + offsetDays);
+  return toCompactDateKey(anchor);
+}
+
 function resolveDateBucket(dateString) {
   const target = toSeoulDate(new Date(dateString));
   const today = toSeoulDate();
@@ -68,6 +87,22 @@ function relativeUpdatedAt() {
     minute: '2-digit',
     second: '2-digit',
   }).format(new Date());
+}
+
+function escapeFormValue(value) {
+  return String(value ?? '')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"');
+}
+
+function extractHiddenValue(html, fieldName) {
+  const match = html.match(new RegExp(`name="${fieldName.replaceAll('$', '\\$')}"[^>]*value="([^"]*)"`, 'i'));
+  return match ? escapeFormValue(match[1]) : '';
+}
+
+function extractSearchDate(html) {
+  return extractHiddenValue(html, 'ctl00$ctl00$ctl00$cphContents$cphContents$cphContents$hfSearchDate') || toCompactDateKey();
 }
 
 function parseDateLine(lines) {
@@ -103,17 +138,30 @@ function parseScoreRow(line, teamLabel) {
   };
 }
 
+function isScoreToken(value) {
+  return /^(\d+|X|x|-)$/.test(value ?? '');
+}
+
 function parseScoreCells(lines, startIndex, stopLabels) {
   const values = [];
   let cursor = startIndex;
 
   while (cursor < lines.length) {
     const value = lines[cursor];
-    if (!value || stopLabels.includes(value) || isStatusLine(value) || /\d{4}\.\d{2}\.\d{2}\(/.test(value)) {
+    if (
+      !value ||
+      stopLabels.includes(value) ||
+      isStatusLine(value) ||
+      /\d{4}\.\d{2}\.\d{2}\(/.test(value) ||
+      !isScoreToken(value)
+    ) {
       break;
     }
 
     values.push(value);
+    if (values.length >= 16) {
+      break;
+    }
     cursor += 1;
   }
 
@@ -181,6 +229,21 @@ function createMatchId(datePart, awayAbbr, homeAbbr) {
   const teamHash =
     [...`${awayAbbr}${homeAbbr}`].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 1000;
   return Number(`3${compactDate}${teamHash.toString().padStart(3, '0')}`);
+}
+
+function dedupeMatches(matches) {
+  const seen = new Map();
+  matches.forEach((match) => {
+    const key = `${match.league}:${match.startDate}:${match.awayAbbr}:${match.homeAbbr}`;
+    if (!seen.has(key)) {
+      seen.set(key, match);
+    }
+  });
+  return [...seen.values()].sort((left, right) => {
+    const leftTime = Date.parse(left.startDate || '') || 0;
+    const rightTime = Date.parse(right.startDate || '') || 0;
+    return leftTime - rightTime || left.id - right.id;
+  });
 }
 
 function parseGamesFromLines(lines) {
@@ -268,6 +331,10 @@ function parseGamesFromLines(lines) {
 }
 
 export async function fetchKboScoreboard() {
+  if (kboCache.expiresAt > Date.now() && kboCache.matches.length > 0) {
+    return kboCache.matches;
+  }
+
   const response = await fetch(KBO_SCOREBOARD_URL, {
     headers: {
       'User-Agent': 'sport-dashboard/1.0',
@@ -279,6 +346,60 @@ export async function fetchKboScoreboard() {
   }
 
   const html = await response.text();
-  const text = normalizeText(html);
-  return parseGamesFromLines(text.split('\n').map((line) => line.trim()).filter(Boolean));
+  const baseDateKey = extractSearchDate(html);
+  const formState = {
+    __VIEWSTATE: extractHiddenValue(html, '__VIEWSTATE'),
+    __VIEWSTATEGENERATOR: extractHiddenValue(html, '__VIEWSTATEGENERATOR'),
+    __EVENTVALIDATION: extractHiddenValue(html, '__EVENTVALIDATION'),
+  };
+
+  const dateKeys = [...new Set(KBO_RANGE_OFFSETS.map((offset) => shiftCompactDateKey(baseDateKey, offset)))];
+
+  const pages = await Promise.all(
+    dateKeys.map(async (dateKey) => {
+      if (dateKey === baseDateKey) {
+        return html;
+      }
+
+      const body = new URLSearchParams({
+        ...formState,
+        'ctl00$ctl00$ctl00$cphContents$cphContents$cphContents$hfSearchDate': dateKey,
+        'ctl00$ctl00$ctl00$cphContents$cphContents$cphContents$btnCalendarSelect': '',
+      });
+
+      const pageResponse = await fetch(KBO_SCOREBOARD_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'sport-dashboard/1.0',
+        },
+        body,
+      });
+
+      if (!pageResponse.ok) {
+        throw new Error(`KBO 날짜별 스코어보드 요청 실패 (${pageResponse.status})`);
+      }
+
+      return pageResponse.text();
+    }),
+  );
+
+  const matches = dedupeMatches(
+    (
+      await Promise.all(
+        pages.map(async (pagePromise) => {
+          const pageHtml = await pagePromise;
+          const text = normalizeText(pageHtml);
+          return parseGamesFromLines(text.split('\n').map((line) => line.trim()).filter(Boolean));
+        }),
+      )
+    ).flat(),
+  );
+
+  kboCache = {
+    expiresAt: Date.now() + KBO_CACHE_TTL_MS,
+    matches,
+  };
+
+  return matches;
 }

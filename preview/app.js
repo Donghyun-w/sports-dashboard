@@ -40,7 +40,7 @@ const initialMatches = [
 const bucketLabels = { YESTERDAY: 'Yesterday', TODAY: 'Today', UPCOMING: 'Upcoming' };
 const storageKey = 'sport-dashboard-preview-favorites';
 const apiBase = location.protocol === 'file:' || location.port === '4174' ? 'http://127.0.0.1:8787' : '';
-let matches = initialMatches.map(normalizeMatch);
+let matches = [];
 const state = {
   league: 'ALL',
   bucket: 'TODAY',
@@ -172,8 +172,8 @@ function resolveBucket(match) {
 }
 
 function getKboReferenceDate() {
-  const kboMatches = matches.filter((match) => match.league === 'KBO' && match.startDate).sort((a, b) => (Date.parse(a.startDate || '') || 0) - (Date.parse(b.startDate || '') || 0));
-  return kboMatches[0]?.startDate || new Date().toISOString();
+  const todayKboMatch = matches.find((match) => match.league === 'KBO' && match.startDate && resolveBucket(match) === 'TODAY');
+  return todayKboMatch?.startDate || new Date().toISOString();
 }
 
 function resolveKboBucket(match, referenceDate) {
@@ -225,24 +225,6 @@ function normalizeMatch(match) {
   };
 }
 
-function mergeLiveMatches(liveMatches) {
-  const normalizedLiveMatches = liveMatches.map(normalizeMatch);
-  return [
-    ...normalizedLiveMatches,
-    ...initialMatches.filter(
-      (seed) =>
-        !(seed.league === 'KBO' && resolveBucket(seed) === 'TODAY') &&
-        !normalizedLiveMatches.some(
-          (live) =>
-            live.league === seed.league &&
-            live.homeAbbr === seed.homeAbbr &&
-            live.awayAbbr === seed.awayAbbr &&
-            resolveBucket(live) === resolveBucket(seed),
-        ),
-    ).map(normalizeMatch),
-  ];
-}
-
 async function fetchScoreboard() {
   if (!apiBase) return;
   state.loadingScores = true;
@@ -252,9 +234,7 @@ async function fetchScoreboard() {
     const response = await fetch(`${apiBase}/api/scoreboard`);
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || '점수 데이터를 불러오지 못했습니다.');
-    if (Array.isArray(payload.matches) && payload.matches.length > 0) {
-      matches = mergeLiveMatches(payload.matches);
-    }
+    matches = Array.isArray(payload.matches) ? payload.matches.map(normalizeMatch) : [];
     state.scoreMessage = payload.message || null;
   } catch (error) {
     state.scoreMessage = error instanceof Error ? error.message : '점수 데이터를 불러오지 못했습니다.';
@@ -349,7 +329,7 @@ function render() {
       <section class="team-strip">
         <div class="panel-header"><div><p class="section-label">Teams</p><h2>Browse by Team</h2></div><span class="match-count">${team ? team.name : ''}</span></div>
         <div class="team-tools"><label class="team-search"><span>Search team</span><input type="text" value="${state.teamSearchQuery.replaceAll('"', '&quot;')}" placeholder="팀명 / 약자 / 리그 검색" data-team-search /></label><span class="team-search-meta">${visibleTeams.length} / ${teams.length} teams</span></div>
-        <div class="team-tabs compact">${visibleTeams.map((item) => `<button class="team-tab ${state.selectedTeam === item.key ? 'active' : ''}" data-team="${item.key}"><img class="team-emblem sm team-emblem-image" src="${logo(item.abbr, item.league)}" alt="${item.name}" onerror="this.src='${fallbackLogo(item.abbr, item.league)}'" /><span>${item.abbr}</span></button>`).join('')}</div>
+        <div class="team-tabs compact">${visibleTeams.map((item) => `<button class="team-tab ${state.scheduleTeam === item.key ? 'active' : ''}" data-team="${item.key}"><img class="team-emblem sm team-emblem-image" src="${logo(item.abbr, item.league)}" alt="${item.name}" onerror="this.src='${fallbackLogo(item.abbr, item.league)}'" /><span>${item.abbr}</span></button>`).join('')}</div>
         ${visibleTeams.length ? '' : '<div class="empty-card team-empty">검색된 팀이 없습니다.</div>'}
       </section>
       <section class="board-layout">

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { initialMatches } from './data';
 import { getLeagueTeams, getTeamByAbbr, getTeamByKey, resolveLeagueFromAbbr, type TeamCatalogEntry } from './teamCatalog';
 import { getTeamBrand, TeamEmblem } from './teamBranding';
 import type { League, Match, ScheduleBucket } from './types';
@@ -37,12 +36,12 @@ function App() {
   const [teamViewTab, setTeamViewTab] = useState<TeamViewTab>('recent');
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [apiState, setApiState] = useState<ApiState>({
-    matches: initialMatches,
+    matches: [],
     lastUpdated: null,
     source: 'demo',
-    message: '데모 데이터로 시작했습니다.',
+    message: '실시간 데이터를 불러오는 중입니다.',
   });
-  const [selectedMatchId, setSelectedMatchId] = useState<number>(initialMatches[0]?.id ?? 0);
+  const [selectedMatchId, setSelectedMatchId] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [scheduleTeamKey, setScheduleTeamKey] = useState<string | null>(null);
   const [favoriteTeams, setFavoriteTeams] = useState<string[]>(() => {
@@ -92,11 +91,11 @@ function App() {
   }, [leagueFilter, scheduleTeamKey]);
 
   const kboReferenceDate = useMemo(() => {
-    const kboMatches = apiState.matches
-      .filter((match) => match.league === 'KBO' && match.startDate)
-      .sort(sortByDateAsc);
+    const todayKboMatch = apiState.matches.find(
+      (match) => match.league === 'KBO' && match.startDate && resolveMatchBucket(match) === 'TODAY',
+    );
 
-    return kboMatches[0]?.startDate ?? new Date().toISOString();
+    return todayKboMatch?.startDate ?? new Date().toISOString();
   }, [apiState.matches]);
 
   const filteredMatches = useMemo(() => {
@@ -299,7 +298,7 @@ function App() {
       }
 
       setApiState({
-        matches: payload.matches.length > 0 ? mergeLiveMatches(payload.matches) : initialMatches,
+        matches: payload.matches,
         lastUpdated: payload.lastUpdated,
         source: payload.source,
         message: payload.message,
@@ -308,7 +307,7 @@ function App() {
       const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
       setApiState((current) => ({
         ...current,
-        matches: current.matches.length > 0 ? current.matches : initialMatches,
+        matches: current.matches,
         message,
       }));
     } finally {
@@ -423,7 +422,7 @@ function App() {
             {visibleTeamProfiles.map((team) => (
               <button
                 key={team.key}
-                className={`team-tab ${selectedTeamKey === team.key ? 'active' : ''}`}
+                className={`team-tab ${scheduleTeamKey === team.key ? 'active' : ''}`}
                 onClick={() => {
                   setSelectedTeamKey(team.key);
                   setScheduleTeamKey(team.key);
@@ -830,23 +829,6 @@ function StatBar({
       ) : null}
     </div>
   );
-}
-
-function mergeLiveMatches(liveMatches: Match[]) {
-  return [
-    ...liveMatches,
-    ...initialMatches.filter(
-      (seed) =>
-        !(seed.league === 'KBO' && resolveMatchBucket(seed) === 'TODAY') &&
-        !liveMatches.some(
-          (live) =>
-            live.league === seed.league &&
-            live.homeAbbr === seed.homeAbbr &&
-            live.awayAbbr === seed.awayAbbr &&
-            resolveMatchBucket(live) === resolveMatchBucket(seed),
-        ),
-    ),
-  ];
 }
 
 function inferDateBucket(match: Match): ScheduleBucket {
