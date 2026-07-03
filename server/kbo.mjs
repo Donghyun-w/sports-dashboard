@@ -140,7 +140,7 @@ function buildStatus(statusLine, awayScore, homeScore) {
 
 function isOfficialKboMatch({ awayLabel, homeLabel, venue, statusLine }) {
   if (!TEAM_MAP[awayLabel] || !TEAM_MAP[homeLabel]) return false;
-  if (!venue || /올스타|드림|나눔|북부|남부|퓨처스/.test(venue)) return false;
+  if (!venue) return false;
   if (EXCLUDED_STATUS_PATTERN.test(statusLine)) return false;
   return true;
 }
@@ -191,14 +191,15 @@ function parseGamesFromLines(lines) {
     const awayLabel = lines[index];
     if (!TEAM_KEYS.includes(awayLabel)) continue;
 
-    const statusLine = lines[index + 1]?.trim();
-    if (!statusLine || !isStatusLine(statusLine)) continue;
+    const rawStatusCandidates = [lines[index + 1], lines[index + 2], lines[index + 3]].map((entry) => entry?.trim() ?? '');
+    const statusLine = rawStatusCandidates.find((entry) => isStatusLine(entry));
+    if (!statusLine) continue;
 
-    const homeIndex = [index + 2, index + 3, index + 4, index + 5].find((candidate) => TEAM_KEYS.includes(lines[candidate]));
+    const homeIndex = [index + 2, index + 3, index + 4, index + 5, index + 6].find((candidate) => TEAM_KEYS.includes(lines[candidate]));
     if (!homeIndex) continue;
 
     const homeLabel = lines[homeIndex];
-    const venueIndex = [homeIndex + 1, homeIndex + 2, homeIndex + 3, homeIndex + 4, homeIndex + 5, homeIndex + 6].find((candidate) =>
+    const venueIndex = [homeIndex + 1, homeIndex + 2, homeIndex + 3, homeIndex + 4, homeIndex + 5, homeIndex + 6, homeIndex + 7].find((candidate) =>
       /\d{1,2}:\d{2}$/.test(lines[candidate] ?? ''),
     );
     if (!venueIndex) continue;
