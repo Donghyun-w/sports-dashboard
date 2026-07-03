@@ -22,6 +22,7 @@ const state = {
   teamTab: 'recent',
   teamSearchQuery: '',
   selectedTeam: 'NBA:LAL',
+  scheduleTeam: null,
   favorites: JSON.parse(localStorage.getItem(storageKey) || '[]'),
   teamNews: { teamKey: '', loading: false, message: null, articles: [] },
   loadingScores: false,
@@ -46,8 +47,14 @@ function logo(abbr, league) {
 }
 
 function filtered() {
+  const scopedTeam = state.scheduleTeam ? getTeamByKey(state.scheduleTeam) : null;
   return matches
-    .filter((m) => (state.league === 'ALL' || m.league === state.league) && resolveBucket(m) === state.bucket)
+    .filter((m) => {
+      const leagueOk = state.league === 'ALL' || m.league === state.league;
+      const bucketOk = resolveBucket(m) === state.bucket;
+      const teamOk = scopedTeam ? m.homeAbbr === scopedTeam.abbr || m.awayAbbr === scopedTeam.abbr : true;
+      return leagueOk && bucketOk && teamOk;
+    })
     .sort((a, b) => {
       const af = state.favorites.includes(a.awayAbbr) || state.favorites.includes(a.homeAbbr);
       const bf = state.favorites.includes(b.awayAbbr) || state.favorites.includes(b.homeAbbr);
@@ -119,7 +126,29 @@ function inferDateBucket(match) {
 }
 
 function resolveBucket(match) {
-  return match.dateBucket || match.bucket || inferDateBucket(match);
+  if (match.dateBucket) return match.dateBucket;
+  if (match.bucket) return match.bucket;
+  if (match.startDate) {
+    const target = toSeoulDayKey(match.startDate);
+    const today = toSeoulDayKey(new Date().toISOString());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = toSeoulDayKey(yesterdayDate.toISOString());
+
+    if (target === today) return 'TODAY';
+    if (target === yesterday) return 'YESTERDAY';
+    return target > today ? 'UPCOMING' : 'YESTERDAY';
+  }
+  return inferDateBucket(match);
+}
+
+function toSeoulDayKey(dateString) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(dateString));
 }
 
 function normalizeStat(stat) {
@@ -150,12 +179,11 @@ function normalizeMatch(match) {
 
 function mergeLiveMatches(liveMatches) {
   const normalizedLiveMatches = liveMatches.map(normalizeMatch);
-  const hasLiveKbo = normalizedLiveMatches.some((match) => match.league === 'KBO');
   return [
     ...normalizedLiveMatches,
     ...initialMatches.filter(
       (seed) =>
-        !(hasLiveKbo && seed.league === 'KBO') &&
+        !(seed.league === 'KBO' && resolveBucket(seed) === 'TODAY') &&
         !normalizedLiveMatches.some(
           (live) =>
             live.league === seed.league &&
@@ -238,6 +266,7 @@ function render() {
   if (visibleTeams.length && !visibleTeams.find((team) => team.key === state.selectedTeam)) state.selectedTeam = visibleTeams[0]?.key || state.selectedTeam;
   const team = selectedTeamProfile();
   const teamGames = selectedTeamGames();
+  const scopedScheduleTeam = state.scheduleTeam ? getTeamByKey(state.scheduleTeam) : null;
 
   if (state.teamTab === 'news' && team && state.teamNews.teamKey !== team.key && !state.teamNews.loading) {
     void fetchTeamNews(team);
@@ -273,7 +302,8 @@ function render() {
       </section>
       <section class="board-layout">
         <aside class="schedule-panel">
-          <div class="panel-header"><div><p class="section-label">Schedule</p><h2>${bucketLabels[state.bucket]}</h2></div><span class="match-count">${list.length} games</span></div>
+          <div class="panel-header"><div><p class="section-label">Schedule</p><h2>${scopedScheduleTeam ? `${scopedScheduleTeam.name} · ${bucketLabels[state.bucket]}` : bucketLabels[state.bucket]}</h2></div><span class="match-count">${list.length} games</span></div>
+          ${scopedScheduleTeam ? `<div class="schedule-tabs"><button class="schedule-tab active" data-clear-team="1">All Teams</button></div>` : ''}
           <div class="schedule-tabs">${Object.keys(bucketLabels).map((b) => `<button class="schedule-tab ${state.bucket === b ? 'active' : ''}" data-bucket="${b}">${bucketLabels[b]}</button>`).join('')}</div>
           <div class="match-list">${list.map((m) => `<article class="match-row ${state.selected === m.id ? 'selected' : ''}" data-open="${m.id}" tabindex="0"><div class="row-top"><span class="badge ${m.status.toLowerCase()}">${m.status === 'FINAL' ? 'Final' : m.period}</span><div class="row-top-right">${state.favorites.includes(m.awayAbbr) || state.favorites.includes(m.homeAbbr) ? '<span class="favorite-mark">★</span>' : ''}<span class="league-badge">${m.league}</span></div></div><div class="row-main">${teamBlock(m, 'away')}<div class="center-score"><strong>${m.awayScore}</strong><span>:</span><strong>${m.homeScore}</strong></div>${teamBlock(m, 'home')}</div><div class="row-foot"><span>${m.venue}</span><span>${m.startTime}</span></div></article>`).join('') || '<div class="empty-card">선택한 조건에 맞는 경기가 없습니다.</div>'}</div>
         </aside>
@@ -293,10 +323,11 @@ function render() {
 
   app.querySelectorAll('[data-league]').forEach((el) => el.onclick = () => { state.league = el.dataset.league; state.selected = filtered()[0]?.id || state.selected; render(); });
   app.querySelectorAll('[data-bucket]').forEach((el) => el.onclick = () => { state.bucket = el.dataset.bucket; state.selected = filtered()[0]?.id || state.selected; render(); });
+  app.querySelectorAll('[data-clear-team]').forEach((el) => el.onclick = () => { state.scheduleTeam = null; state.selected = filtered()[0]?.id || state.selected; render(); });
   app.querySelectorAll('[data-open]').forEach((el) => { el.onclick = () => { state.selected = Number(el.dataset.open); render(); }; el.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { state.selected = Number(el.dataset.open); render(); } }; });
   app.querySelectorAll('[data-tab]').forEach((el) => el.onclick = () => { state.detailTab = el.dataset.tab; render(); });
   app.querySelectorAll('[data-fav]').forEach((el) => el.onclick = (event) => { event.stopPropagation(); toggleFavorite(el.dataset.fav); });
-  app.querySelectorAll('[data-team]').forEach((el) => el.onclick = () => { state.selectedTeam = el.dataset.team; if (state.teamTab === 'news') state.teamNews = { teamKey: '', loading: false, message: null, articles: [] }; render(); });
+  app.querySelectorAll('[data-team]').forEach((el) => el.onclick = () => { state.selectedTeam = el.dataset.team; state.scheduleTeam = el.dataset.team; if (state.teamTab === 'news') state.teamNews = { teamKey: '', loading: false, message: null, articles: [] }; state.selected = filtered()[0]?.id || state.selected; render(); });
   app.querySelectorAll('[data-team-view]').forEach((el) => el.onclick = () => { state.teamTab = el.dataset.teamView; render(); });
   const refreshButton = app.querySelector('.refresh-button');
   if (refreshButton) refreshButton.onclick = () => void fetchScoreboard();

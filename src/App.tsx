@@ -44,6 +44,7 @@ function App() {
   });
   const [selectedMatchId, setSelectedMatchId] = useState<number>(initialMatches[0]?.id ?? 0);
   const [loading, setLoading] = useState(false);
+  const [scheduleTeamKey, setScheduleTeamKey] = useState<string | null>(null);
   const [favoriteTeams, setFavoriteTeams] = useState<string[]>(() => {
     if (typeof window === 'undefined') {
       return [];
@@ -80,11 +81,16 @@ function App() {
   }, [favoriteTeams]);
 
   const filteredMatches = useMemo(() => {
+    const scopedTeam = scheduleTeamKey ? getTeamByKey(scheduleTeamKey) : null;
+
     return apiState.matches
       .filter((match) => {
         const leagueOk = leagueFilter === 'ALL' || match.league === leagueFilter;
-        const dateOk = (match.dateBucket ?? inferDateBucket(match)) === dateFilter;
-        return leagueOk && dateOk;
+        const dateOk = resolveMatchBucket(match) === dateFilter;
+        const teamOk = scopedTeam
+          ? match.homeAbbr === scopedTeam.abbr || match.awayAbbr === scopedTeam.abbr
+          : true;
+        return leagueOk && dateOk && teamOk;
       })
       .sort((left, right) => {
         const leftFavorite = isFavoriteMatch(left, favoriteTeams);
@@ -96,7 +102,7 @@ function App() {
 
         return left.id - right.id;
       });
-  }, [apiState.matches, dateFilter, favoriteTeams, leagueFilter]);
+  }, [apiState.matches, dateFilter, favoriteTeams, leagueFilter, scheduleTeamKey]);
 
   const leagueMatches = useMemo(() => {
     return apiState.matches.filter((match) => leagueFilter === 'ALL' || match.league === leagueFilter);
@@ -160,6 +166,7 @@ function App() {
     league: team.league,
   }));
   const selectedTeam = (getTeamByKey(selectedTeamKey) ?? teamProfiles[0] ?? null) as TeamCatalogEntry | null;
+  const scopedScheduleTeam = (scheduleTeamKey ? getTeamByKey(scheduleTeamKey) : null) as TeamCatalogEntry | null;
 
   const teamGames = useMemo(() => {
     if (!selectedTeam) {
@@ -339,6 +346,7 @@ function App() {
                 onClick={() => {
                   setLeagueFilter(brand.league);
                   setSelectedTeamKey(brand.key);
+                  setScheduleTeamKey(brand.key);
                 }}
               >
                 <TeamEmblem team={brand.abbr} abbr={brand.abbr} league={brand.league} size="sm" />
@@ -390,6 +398,7 @@ function App() {
                 className={`team-tab ${selectedTeamKey === team.key ? 'active' : ''}`}
                 onClick={() => {
                   setSelectedTeamKey(team.key);
+                  setScheduleTeamKey(team.key);
                   setTeamViewTab('recent');
                 }}
               >
@@ -407,10 +416,18 @@ function App() {
           <div className="panel-header">
             <div>
               <p className="section-label">Schedule</p>
-              <h2>{dateFilterLabel[dateFilter]}</h2>
+              <h2>{scopedScheduleTeam ? `${scopedScheduleTeam.name} · ${dateFilterLabel[dateFilter]}` : dateFilterLabel[dateFilter]}</h2>
             </div>
             <span className="match-count">{filteredMatches.length} games</span>
           </div>
+
+          {scopedScheduleTeam ? (
+            <div className="schedule-tabs">
+              <button className="schedule-tab active" onClick={() => setScheduleTeamKey(null)}>
+                All Teams
+              </button>
+            </div>
+          ) : null}
 
           <div className="schedule-tabs">
             {dateFilters.map((filter) => (
@@ -589,6 +606,7 @@ function App() {
               className={`team-tab ${selectedTeamKey === team.key ? 'active' : ''}`}
               onClick={() => {
                 setSelectedTeamKey(team.key);
+                setScheduleTeamKey(team.key);
                 setTeamViewTab('recent');
               }}
             >
@@ -781,18 +799,17 @@ function StatBar({
 }
 
 function mergeLiveMatches(liveMatches: Match[]) {
-  const hasLiveKbo = liveMatches.some((match) => match.league === 'KBO');
   return [
     ...liveMatches,
     ...initialMatches.filter(
       (seed) =>
-        !(hasLiveKbo && seed.league === 'KBO') &&
+        !(seed.league === 'KBO' && resolveMatchBucket(seed) === 'TODAY') &&
         !liveMatches.some(
           (live) =>
             live.league === seed.league &&
             live.homeAbbr === seed.homeAbbr &&
             live.awayAbbr === seed.awayAbbr &&
-            (live.dateBucket ?? inferDateBucket(live)) === (seed.dateBucket ?? inferDateBucket(seed)),
+            resolveMatchBucket(live) === resolveMatchBucket(seed),
         ),
     ),
   ];
@@ -803,6 +820,35 @@ function inferDateBucket(match: Match): ScheduleBucket {
     return 'UPCOMING';
   }
   return 'TODAY';
+}
+
+function resolveMatchBucket(match: Match): ScheduleBucket {
+  if (match.dateBucket) {
+    return match.dateBucket;
+  }
+
+  if (match.startDate) {
+    const target = toSeoulDayKey(match.startDate);
+    const today = toSeoulDayKey(new Date().toISOString());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = toSeoulDayKey(yesterdayDate.toISOString());
+
+    if (target === today) return 'TODAY';
+    if (target === yesterday) return 'YESTERDAY';
+    return target > today ? 'UPCOMING' : 'YESTERDAY';
+  }
+
+  return inferDateBucket(match);
+}
+
+function toSeoulDayKey(dateString: string) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(dateString));
 }
 
 function renderCenterStatus(match: Match) {
