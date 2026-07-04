@@ -104,8 +104,7 @@ function App() {
     return apiState.matches
       .filter((match) => {
         const leagueOk = leagueFilter === 'ALL' || match.league === leagueFilter;
-        const dateOk =
-          (match.league === 'KBO' ? resolveKboBucket(match, kboReferenceDate) : resolveMatchBucket(match)) === dateFilter;
+        const dateOk = matchesScheduleBucket(match, dateFilter, kboReferenceDate);
         const teamOk = scopedTeam
           ? match.homeAbbr === scopedTeam.abbr || match.awayAbbr === scopedTeam.abbr
           : true;
@@ -836,6 +835,24 @@ function inferDateBucket(match: Match): ScheduleBucket {
     return 'UPCOMING';
   }
   return 'TODAY';
+}
+
+function matchesScheduleBucket(match: Match, bucket: ScheduleBucket, kboReferenceDate: string) {
+  if (!match.startDate) {
+    return resolveMatchBucket(match) === bucket;
+  }
+
+  if (match.league === 'KBO') {
+    const diff = getDayDiff(match.startDate, kboReferenceDate);
+    if (bucket === 'TODAY') return diff === 0;
+    if (bucket === 'YESTERDAY') return diff === -1;
+    return diff === 1;
+  }
+
+  const diff = getDayDiff(match.startDate, new Date().toISOString());
+  if (bucket === 'TODAY') return diff === 0;
+  if (bucket === 'YESTERDAY') return diff === -1;
+  return diff === 1;
 }
 
 function resolveMatchBucket(match: Match): ScheduleBucket {

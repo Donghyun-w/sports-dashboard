@@ -79,7 +79,7 @@ function filtered() {
   return matches
     .filter((m) => {
       const leagueOk = state.league === 'ALL' || m.league === state.league;
-      const bucketOk = (m.league === 'KBO' ? resolveKboBucket(m, kboReferenceDate) : resolveBucket(m)) === state.bucket;
+      const bucketOk = matchesScheduleBucket(m, state.bucket, kboReferenceDate);
       const teamOk = scopedTeam ? m.homeAbbr === scopedTeam.abbr || m.awayAbbr === scopedTeam.abbr : true;
       return leagueOk && bucketOk && teamOk;
     })
@@ -152,6 +152,24 @@ function renderStats(stats) {
 function inferDateBucket(match) {
   if (match.status === 'UPCOMING') return 'UPCOMING';
   return 'TODAY';
+}
+
+function matchesScheduleBucket(match, bucket, kboReferenceDate) {
+  if (!match.startDate) {
+    return resolveBucket(match) === bucket;
+  }
+
+  if (match.league === 'KBO') {
+    const diff = getDayDiff(match.startDate, kboReferenceDate);
+    if (bucket === 'TODAY') return diff === 0;
+    if (bucket === 'YESTERDAY') return diff === -1;
+    return diff === 1;
+  }
+
+  const diff = getDayDiff(match.startDate, new Date().toISOString());
+  if (bucket === 'TODAY') return diff === 0;
+  if (bucket === 'YESTERDAY') return diff === -1;
+  return diff === 1;
 }
 
 function resolveBucket(match) {
