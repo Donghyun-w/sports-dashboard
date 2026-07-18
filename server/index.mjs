@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { fetchNbaGames, fetchNflGames } from './balldontlie.mjs';
-import { fetchKboScoreboard } from './kbo.mjs';
+import { fetchKboBoxScore, fetchKboScoreboard } from './kbo.mjs';
 import { fetchTeamNews } from './news.mjs';
 import { transformNbaGames, transformNflGames } from './transformers.mjs';
 
@@ -106,6 +106,40 @@ async function handleTeamNews(requestUrl, response) {
   }
 }
 
+async function handleKboBoxScore(requestUrl, response) {
+  const gameId = requestUrl.searchParams.get('gameId');
+  const seasonId = requestUrl.searchParams.get('seasonId') ?? '';
+  const seriesId = requestUrl.searchParams.get('seriesId') ?? '0';
+  const gameDate = requestUrl.searchParams.get('gameDate') ?? '';
+
+  if (!gameId) {
+    sendJson(response, 400, {
+      boxScore: null,
+      message: 'gameId 파라미터가 필요합니다.',
+    });
+    return;
+  }
+
+  try {
+    const boxScore = await fetchKboBoxScore({
+      gameId,
+      seasonId,
+      seriesId,
+      gameDate,
+    });
+
+    sendJson(response, 200, {
+      boxScore,
+      message: boxScore ? 'KBO 박스스코어를 불러왔습니다.' : '표시할 KBO 박스스코어가 없습니다.',
+    });
+  } catch (error) {
+    sendJson(response, 502, {
+      boxScore: null,
+      message: error instanceof Error ? error.message : 'KBO 박스스코어 요청 중 오류가 발생했습니다.',
+    });
+  }
+}
+
 const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host}`);
 
@@ -126,6 +160,11 @@ const server = createServer(async (request, response) => {
 
   if (request.method === 'GET' && requestUrl.pathname === '/api/team-news') {
     await handleTeamNews(requestUrl, response);
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/kbo-boxscore') {
+    await handleKboBoxScore(requestUrl, response);
     return;
   }
 

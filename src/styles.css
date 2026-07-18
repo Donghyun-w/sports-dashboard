@@ -805,6 +805,74 @@ button {
   margin: 8px 0 0;
 }
 
+.kbo-boxscore-stack {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.kbo-note-list {
+  display: grid;
+  gap: 12px;
+}
+
+.kbo-note-item {
+  display: grid;
+  gap: 6px;
+}
+
+.kbo-note-item span {
+  color: rgba(233, 239, 255, 0.62);
+  font-size: 0.9rem;
+}
+
+.kbo-note-item strong {
+  line-height: 1.5;
+}
+
+.kbo-table-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.kbo-record-table-wrap {
+  overflow-x: auto;
+}
+
+.kbo-record-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.kbo-record-table th,
+.kbo-record-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.kbo-record-table th {
+  color: rgba(233, 239, 255, 0.62);
+  font-weight: 600;
+}
+
+.kbo-record-table td:first-child,
+.kbo-record-table td:nth-child(2),
+.kbo-record-table td:nth-child(3),
+.kbo-record-table th:first-child,
+.kbo-record-table th:nth-child(2),
+.kbo-record-table th:nth-child(3) {
+  text-align: left;
+}
+
+.kbo-record-table tfoot td {
+  font-weight: 700;
+  color: #f8fbff;
+}
+
 @media (max-width: 1400px) {
   .board-layout {
     grid-template-columns: 1fr;

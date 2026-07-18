@@ -1,16 +1,18 @@
 const KBO_SCOREBOARD_URL = 'https://www.koreabaseball.com/Schedule/ScoreBoard.aspx';
+const KBO_BOXSCORE_URL = 'https://www.koreabaseball.com/ws/Schedule.asmx/GetBoxScore';
+const KBO_PITCHER_DETAIL_URL = 'https://www.koreabaseball.com/Record/Player/PitcherDetail/Basic.aspx';
 
 const TEAM_MAP = {
-  LG: { abbr: 'LGT', name: 'LG Twins' },
-  한화: { abbr: 'HAN', name: 'Hanwha Eagles' },
-  SSG: { abbr: 'SSG', name: 'SSG Landers' },
-  삼성: { abbr: 'SAM', name: 'Samsung Lions' },
-  NC: { abbr: 'NCD', name: 'NC Dinos' },
-  KT: { abbr: 'KTW', name: 'KT Wiz' },
-  롯데: { abbr: 'LOT', name: 'Lotte Giants' },
-  KIA: { abbr: 'KIA', name: 'KIA Tigers' },
-  두산: { abbr: 'DSB', name: 'Doosan Bears' },
-  키움: { abbr: 'KIW', name: 'Kiwoom Heroes' },
+  LG: { abbr: 'LGT', name: 'LG Twins', gameCode: 'LG' },
+  한화: { abbr: 'HAN', name: 'Hanwha Eagles', gameCode: 'HH' },
+  SSG: { abbr: 'SSG', name: 'SSG Landers', gameCode: 'SK' },
+  삼성: { abbr: 'SAM', name: 'Samsung Lions', gameCode: 'SS' },
+  NC: { abbr: 'NCD', name: 'NC Dinos', gameCode: 'NC' },
+  KT: { abbr: 'KTW', name: 'KT Wiz', gameCode: 'KT' },
+  롯데: { abbr: 'LOT', name: 'Lotte Giants', gameCode: 'LT' },
+  KIA: { abbr: 'KIA', name: 'KIA Tigers', gameCode: 'HT' },
+  두산: { abbr: 'DSB', name: 'Doosan Bears', gameCode: 'OB' },
+  키움: { abbr: 'KIW', name: 'Kiwoom Heroes', gameCode: 'WO' },
 };
 
 const TEAM_KEYS = Object.keys(TEAM_MAP);
@@ -21,6 +23,8 @@ let kboCache = {
   expiresAt: 0,
   matches: [],
 };
+const kboBoxScoreCache = new Map();
+const kboPlayerNameCache = new Map();
 
 function decodeHtml(text) {
   return text
@@ -246,6 +250,81 @@ function dedupeMatches(matches) {
   });
 }
 
+function inferGameId(datePart, awayTeam, homeTeam) {
+  return `${datePart.replaceAll('.', '')}${awayTeam.gameCode}${homeTeam.gameCode}0`;
+}
+
+function cleanCellText(text) {
+  return decodeHtml(String(text ?? ''))
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeTableRow(row) {
+  return row.row.map((cell) => cleanCellText(cell.Text));
+}
+
+function normalizeTableHeaders(headers) {
+  if (!headers?.length) return [];
+  return normalizeTableRow(headers[0]);
+}
+
+async function resolvePitcherName(playerId) {
+  if (!/^\d+$/.test(playerId)) {
+    return playerId;
+  }
+
+  if (kboPlayerNameCache.has(playerId)) {
+    return kboPlayerNameCache.get(playerId);
+  }
+
+  try {
+    const url = `${KBO_PITCHER_DETAIL_URL}?playerId=${playerId}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'sport-dashboard/1.0',
+      },
+    });
+
+    if (!response.ok) {
+      kboPlayerNameCache.set(playerId, playerId);
+      return playerId;
+    }
+
+    const html = await response.text();
+    const match = html.match(/playerProfile_lblName">([^<]+)</i);
+    const resolvedName = cleanCellText(match?.[1] ?? '') || playerId;
+    kboPlayerNameCache.set(playerId, resolvedName);
+    return resolvedName;
+  } catch {
+    kboPlayerNameCache.set(playerId, playerId);
+    return playerId;
+  }
+}
+
+async function normalizeBoxScoreTable(table, title, resolvePitcherNames = false) {
+  const headers = normalizeTableHeaders(table.headers);
+  const rows = await Promise.all(
+    (table.rows ?? []).map(async (row) => {
+      const normalized = normalizeTableRow(row);
+      if (resolvePitcherNames && normalized[0]) {
+        normalized[0] = await resolvePitcherName(normalized[0]);
+      }
+      return normalized;
+    }),
+  );
+
+  const footer = table.tfoot?.length ? normalizeTableRow(table.tfoot[0]) : undefined;
+
+  return {
+    title,
+    headers,
+    rows,
+    footer,
+  };
+}
+
 function parseGamesFromLines(lines) {
   const datePart = parseDateLine(lines);
   const games = [];
@@ -305,6 +384,9 @@ function parseGamesFromLines(lines) {
       status,
       dateBucket: resolveDateBucket(startDate),
       startDate,
+      externalGameId: inferGameId(datePart, away, home),
+      seasonId: datePart.slice(0, 4),
+      seriesId: '0',
       homeAbbr: home.abbr,
       awayAbbr: away.abbr,
       homeTeam: home.name,
@@ -402,4 +484,70 @@ export async function fetchKboScoreboard() {
   };
 
   return matches;
+}
+
+export async function fetchKboBoxScore({
+  gameId,
+  seasonId,
+  seriesId = '0',
+  leagueId = '1',
+  gameDate,
+}) {
+  if (!gameId) {
+    throw new Error('KBO gameId가 필요합니다.');
+  }
+
+  const cacheKey = `${leagueId}:${seriesId}:${seasonId}:${gameId}`;
+  const cached = kboBoxScoreCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.payload;
+  }
+
+  const body = new URLSearchParams({
+    leId: leagueId,
+    srId: seriesId,
+    seasonId: seasonId || gameId.slice(0, 4),
+    gameId,
+  });
+
+  const refererDate = gameDate || gameId.slice(0, 8);
+  const response = await fetch(KBO_BOXSCORE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'X-Requested-With': 'XMLHttpRequest',
+      Origin: 'https://www.koreabaseball.com',
+      Referer: `https://www.koreabaseball.com/Schedule/GameCenter/Main.aspx?gameDate=${refererDate}&gameId=${gameId}&section=REVIEW`,
+      'User-Agent': 'Mozilla/5.0',
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(`KBO 박스스코어 요청 실패 (${response.status})`);
+  }
+
+  const payload = await response.json();
+  const tables = payload.tables ?? [];
+  if (tables.length < 5) {
+    return null;
+  }
+
+  const result = {
+    notes: (tables[0]?.rows ?? [])
+      .map((row) => normalizeTableRow(row))
+      .filter((row) => row[0] && row[1])
+      .map(([label, value]) => ({ label, value })),
+    awayHitters: await normalizeBoxScoreTable(tables[1], 'Away Hitters'),
+    homeHitters: await normalizeBoxScoreTable(tables[2], 'Home Hitters'),
+    awayPitchers: await normalizeBoxScoreTable(tables[3], 'Away Pitchers', true),
+    homePitchers: await normalizeBoxScoreTable(tables[4], 'Home Pitchers', true),
+  };
+
+  kboBoxScoreCache.set(cacheKey, {
+    expiresAt: Date.now() + KBO_CACHE_TTL_MS,
+    payload: result,
+  });
+
+  return result;
 }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { KboBoxScoreResponse } from './api';
 import { getLeagueTeams, getTeamByAbbr, getTeamByKey, resolveLeagueFromAbbr, type TeamCatalogEntry } from './teamCatalog';
 import { getTeamBrand, TeamEmblem } from './teamBranding';
-import type { League, Match, ScheduleBucket } from './types';
+import type { KboBoxScore, KboBoxScoreTable, League, Match, ScheduleBucket } from './types';
 
 type LeagueFilter = 'ALL' | League;
 type DetailTab = 'stats' | 'play' | 'standings';
@@ -65,6 +66,17 @@ function App() {
     loading: false,
     message: null,
     articles: [],
+  });
+  const [kboBoxScoreState, setKboBoxScoreState] = useState<{
+    loading: boolean;
+    message: string | null;
+    boxScore: KboBoxScore | null;
+    gameId: string | null;
+  }>({
+    loading: false,
+    message: null,
+    boxScore: null,
+    gameId: null,
   });
 
   useEffect(() => {
@@ -269,6 +281,68 @@ function App() {
       cancelled = true;
     };
   }, [selectedTeam]);
+
+  useEffect(() => {
+    if (selectedMatch?.league !== 'KBO' || !selectedMatch.externalGameId) {
+      setKboBoxScoreState({
+        loading: false,
+        message: null,
+        boxScore: null,
+        gameId: null,
+      });
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchKboBoxScore() {
+      setKboBoxScoreState({
+        loading: true,
+        message: null,
+        boxScore: null,
+        gameId: selectedMatch.externalGameId ?? null,
+      });
+
+      try {
+        const query = new URLSearchParams({
+          gameId: selectedMatch.externalGameId ?? '',
+          seasonId: selectedMatch.seasonId ?? selectedMatch.startDate?.slice(0, 4) ?? '',
+          seriesId: selectedMatch.seriesId ?? '0',
+          gameDate: selectedMatch.startDate?.slice(0, 10).replaceAll('-', '') ?? '',
+        });
+        const response = await fetch(`/api/kbo-boxscore?${query.toString()}`);
+        const payload = (await response.json()) as KboBoxScoreResponse;
+
+        if (!response.ok) {
+          throw new Error(payload.message ?? 'KBO 박스스코어를 불러오지 못했습니다.');
+        }
+
+        if (!cancelled) {
+          setKboBoxScoreState({
+            loading: false,
+            message: payload.message,
+            boxScore: payload.boxScore,
+            gameId: selectedMatch.externalGameId ?? null,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setKboBoxScoreState({
+            loading: false,
+            message: error instanceof Error ? error.message : 'KBO 박스스코어 요청 중 오류가 발생했습니다.',
+            boxScore: null,
+            gameId: selectedMatch.externalGameId ?? null,
+          });
+        }
+      }
+    }
+
+    void fetchKboBoxScore();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedMatch?.externalGameId, selectedMatch?.league, selectedMatch?.seasonId, selectedMatch?.seriesId, selectedMatch?.startDate]);
 
   const summary = useMemo(() => {
     const liveCount = filteredMatches.filter((match) => match.status === 'LIVE').length;
@@ -556,30 +630,65 @@ function App() {
               </div>
 
               {detailTab === 'stats' ? (
-                <div className="detail-grid">
-                  <section className="detail-card">
-                    <h4>Quick Notes</h4>
-                    <div className="notes-grid">
-                      <div>
-                        <span>League</span>
-                        <strong>{selectedMatch.league}</strong>
+                <>
+                  <div className="detail-grid">
+                    <section className="detail-card">
+                      <h4>Quick Notes</h4>
+                      <div className="notes-grid">
+                        <div>
+                          <span>League</span>
+                          <strong>{selectedMatch.league}</strong>
+                        </div>
+                        <div>
+                          <span>Last Update</span>
+                          <strong>{selectedMatch.lastUpdated}</strong>
+                        </div>
                       </div>
-                      <div>
-                        <span>Last Update</span>
-                        <strong>{selectedMatch.lastUpdated}</strong>
-                      </div>
-                    </div>
-                  </section>
+                    </section>
 
-                  <section className="detail-card">
-                    <h4>Team Stats</h4>
-                    <div className="bar-list">
-                      {selectedMatch.keyStats.map((stat) => (
-                        <StatBar key={stat.label} stat={stat} />
-                      ))}
+                    <section className="detail-card">
+                      <h4>Team Stats</h4>
+                      <div className="bar-list">
+                        {selectedMatch.keyStats.map((stat) => (
+                          <StatBar key={stat.label} stat={stat} />
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+
+                  {selectedMatch.league === 'KBO' ? (
+                    <div className="kbo-boxscore-stack">
+                      {kboBoxScoreState.loading ? <div className="empty-card">KBO 타자/투수 기록을 불러오는 중입니다.</div> : null}
+                      {!kboBoxScoreState.loading && !kboBoxScoreState.boxScore ? (
+                        <div className="empty-card">{kboBoxScoreState.message ?? '표시할 KBO 타자/투수 기록이 없습니다.'}</div>
+                      ) : null}
+                      {kboBoxScoreState.boxScore ? (
+                        <>
+                          {kboBoxScoreState.boxScore.notes.length > 0 ? (
+                            <section className="detail-card">
+                              <h4>Game Notes</h4>
+                              <div className="kbo-note-list">
+                                {kboBoxScoreState.boxScore.notes.map((note) => (
+                                  <div key={`${note.label}-${note.value}`} className="kbo-note-item">
+                                    <span>{note.label}</span>
+                                    <strong>{note.value}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                            </section>
+                          ) : null}
+
+                          <div className="kbo-table-grid">
+                            <KboRecordTable title={`${selectedMatch.awayTeam} 타자 기록`} table={kboBoxScoreState.boxScore.awayHitters} />
+                            <KboRecordTable title={`${selectedMatch.homeTeam} 타자 기록`} table={kboBoxScoreState.boxScore.homeHitters} />
+                            <KboRecordTable title={`${selectedMatch.awayTeam} 투수 기록`} table={kboBoxScoreState.boxScore.awayPitchers} />
+                            <KboRecordTable title={`${selectedMatch.homeTeam} 투수 기록`} table={kboBoxScoreState.boxScore.homePitchers} />
+                          </div>
+                        </>
+                      ) : null}
                     </div>
-                  </section>
-                </div>
+                  ) : null}
+                </>
               ) : null}
 
               {detailTab === 'play' ? (
@@ -801,6 +910,45 @@ function TeamGameCard({ match, selectedTeamAbbr }: { match: Match; selectedTeamA
       </div>
       <p className="team-game-time">{match.startTime}</p>
     </article>
+  );
+}
+
+function KboRecordTable({ title, table }: { title: string; table: KboBoxScoreTable }) {
+  const headers = table.headers;
+
+  return (
+    <section className="detail-card">
+      <h4>{title}</h4>
+      <div className="kbo-record-table-wrap">
+        <table className="kbo-record-table">
+          <thead>
+            <tr>
+              {headers.map((header, index) => (
+                <th key={`${title}-header-${index}`}>{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row, rowIndex) => (
+              <tr key={`${title}-row-${rowIndex}`}>
+                {row.map((cell, cellIndex) => (
+                  <td key={`${title}-cell-${rowIndex}-${cellIndex}`}>{cell || '—'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+          {table.footer && table.footer.length > 0 ? (
+            <tfoot>
+              <tr>
+                {table.footer.map((cell, index) => (
+                  <td key={`${title}-foot-${index}`}>{cell || '—'}</td>
+                ))}
+              </tr>
+            </tfoot>
+          ) : null}
+        </table>
+      </div>
+    </section>
   );
 }
 

@@ -8,6 +8,9 @@ export type Match = {
   status: MatchStatus;
   dateBucket?: ScheduleBucket;
   startDate?: string;
+  externalGameId?: string;
+  seasonId?: string;
+  seriesId?: string;
   homeAbbr?: string;
   awayAbbr?: string;
   homeRecord?: string;
@@ -29,4 +32,22 @@ export type Match = {
   }>;
   playByPlay?: string[];
   lastUpdated: string;
+};
+
+export type KboBoxScoreTable = {
+  title: string;
+  headers: string[];
+  rows: string[][];
+  footer?: string[];
+};
+
+export type KboBoxScore = {
+  notes: Array<{
+    label: string;
+    value: string;
+  }>;
+  awayHitters: KboBoxScoreTable;
+  homeHitters: KboBoxScoreTable;
+  awayPitchers: KboBoxScoreTable;
+  homePitchers: KboBoxScoreTable;
 };
