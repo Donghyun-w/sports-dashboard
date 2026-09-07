@@ -110,10 +110,83 @@ function dayDiffFromToday(dateString) {
 
 function isScheduleWindow(dateString) {
   const diff = dayDiffFromToday(dateString);
-  return diff >= -1 && diff <= 7;
+  return diff >= -14 && diff <= 21;
+}
+
+export function transformEspnEvents(events, league) {
+  if (!events || !Array.isArray(events)) return [];
+  return events
+    .map((event) => {
+      const comp = event.competitions?.[0];
+      const competitors = comp?.competitors ?? [];
+      const home = competitors.find((c) => c.homeAway === 'home') ?? competitors[0];
+      const away = competitors.find((c) => c.homeAway === 'away') ?? competitors[1];
+      const statusType = event.status?.type;
+      const isFinal = statusType?.completed ?? false;
+      const isLive = statusType?.state === 'in';
+      const status = isFinal ? 'FINAL' : isLive ? 'LIVE' : 'UPCOMING';
+
+      const homeScore = Number(home?.score || 0);
+      const awayScore = Number(away?.score || 0);
+      const homeTeam = home?.team?.displayName || home?.team?.name || 'Home';
+      const awayTeam = away?.team?.displayName || away?.team?.name || 'Away';
+      const homeAbbr = home?.team?.abbreviation || '';
+      const awayAbbr = away?.team?.abbreviation || '';
+      const homeRecord = home?.records?.[0]?.summary || '';
+      const awayRecord = away?.records?.[0]?.summary || '';
+      const venue = comp?.venue?.fullName || `${homeTeam} 홈경기`;
+      const startDate = event.date || new Date().toISOString();
+
+      const periodStr = isFinal
+        ? '경기 종료'
+        : isLive
+          ? statusType?.detail || '진행 중'
+          : statusType?.shortDetail || '경기 예정';
+
+      const keyStats = [];
+      if (home?.linescores && away?.linescores) {
+        home.linescores.forEach((hLine, i) => {
+          const aLine = away.linescores[i];
+          keyStats.push({
+            label: `${i + 1}Q`,
+            value: `${aLine?.value ?? 0} - ${hLine?.value ?? 0}`,
+            awayValue: aLine?.value ?? 0,
+            homeValue: hLine?.value ?? 0,
+          });
+        });
+      }
+
+      return {
+        id: Number(league === 'NBA' ? `1${event.id}` : `2${event.id}`),
+        league,
+        status,
+        dateBucket: resolveDateBucket(startDate),
+        startDate,
+        homeAbbr,
+        awayAbbr,
+        homeRecord,
+        awayRecord,
+        homeTeam,
+        awayTeam,
+        homeScore,
+        awayScore,
+        period: periodStr,
+        startTime: formatDateLabel(startDate),
+        venue,
+        headline: `${awayTeam} vs ${homeTeam} · ${periodStr}`,
+        summary: isFinal
+          ? `${venue}에서 ${awayTeam} ${awayScore} : ${homeScore} ${homeTeam}로 경기가 종료되었습니다.`
+          : `${venue}에서 경기가 ${isLive ? '실시간 진행 중' : '예정되어'} 있습니다.`,
+        keyStats,
+        lastUpdated: relativeUpdatedAt(),
+      };
+    })
+    .filter((game) => isScheduleWindow(game.startDate))
+    .sort(sortMatches);
 }
 
 export function transformNbaGames(payload) {
+  if (!payload?.data) return [];
   return payload.data
     .map((game) => ({
       id: Number(`1${game.id}`),
@@ -151,6 +224,7 @@ export function transformNbaGames(payload) {
 }
 
 export function transformNflGames(payload) {
+  if (!payload?.data) return [];
   return payload.data
     .map((game) => ({
       id: Number(`2${game.id}`),

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { KboBoxScoreResponse } from './api';
+import { initialMatches } from './data';
 import { getLeagueTeams, getTeamByAbbr, getTeamByKey, resolveLeagueFromAbbr, type TeamCatalogEntry } from './teamCatalog';
 import { getTeamBrand, TeamEmblem } from './teamBranding';
 import type { KboBoxScore, KboBoxScoreTable, League, Match, ScheduleBucket } from './types';
 
 type LeagueFilter = 'ALL' | League;
-type DetailTab = 'stats' | 'play' | 'standings';
+type DetailTab = 'stats' | 'play' | 'standings' | 'records';
 type TeamViewTab = 'recent' | 'upcoming' | 'news';
+type KboStatViewTab = 'batting' | 'pitching';
 
 type ApiState = {
   matches: Match[];
@@ -20,6 +22,8 @@ type TeamNewsArticle = {
   link: string;
   pubDate: string;
   source: string;
+  category?: string;
+  displayDate?: string;
 };
 
 const leagueFilters: LeagueFilter[] = ['ALL', 'NBA', 'NFL', 'KBO'];
@@ -30,6 +34,27 @@ const dateFilterLabel: Record<ScheduleBucket, string> = {
   UPCOMING: 'Upcoming',
 };
 const favoriteStorageKey = 'sport-dashboard-favorites';
+
+function getApiBase() {
+  if (typeof window === 'undefined') return '';
+  if (window.location.port === '5173') {
+    const hostname = window.location.hostname || '127.0.0.1';
+    return `http://${hostname}:8787`;
+  }
+  return '';
+}
+
+async function fetchApi(path: string): Promise<Response> {
+  const directUrl = `${getApiBase()}${path}`;
+  try {
+    const res = await fetch(directUrl);
+    if (res.ok) return res;
+  } catch {
+    // direct connection fallback
+  }
+  return fetch(path);
+}
+
 function App() {
   const [leagueFilter, setLeagueFilter] = useState<LeagueFilter>('ALL');
   const [dateFilter, setDateFilter] = useState<ScheduleBucket>('TODAY');
@@ -37,14 +62,15 @@ function App() {
   const [teamViewTab, setTeamViewTab] = useState<TeamViewTab>('recent');
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [apiState, setApiState] = useState<ApiState>({
-    matches: [],
-    lastUpdated: null,
+    matches: initialMatches,
+    lastUpdated: '방금 전',
     source: 'demo',
-    message: '실시간 데이터를 불러오는 중입니다.',
+    message: null,
   });
   const [selectedMatchId, setSelectedMatchId] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [scheduleTeamKey, setScheduleTeamKey] = useState<string | null>(null);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favoriteTeams, setFavoriteTeams] = useState<string[]>(() => {
     if (typeof window === 'undefined') {
       return [];
@@ -78,6 +104,8 @@ function App() {
     boxScore: null,
     gameId: null,
   });
+  const [kboStatViewTab, setKboStatViewTab] = useState<KboStatViewTab>('batting');
+  const [kboStatTeamSide, setKboStatTeamSide] = useState<'away' | 'home'>('away');
 
   useEffect(() => {
     void fetchScoreboard();
@@ -117,10 +145,11 @@ function App() {
       .filter((match) => {
         const leagueOk = leagueFilter === 'ALL' || match.league === leagueFilter;
         const dateOk = matchesScheduleBucket(match, dateFilter, kboReferenceDate);
+        const favoriteOk = favoritesOnly ? isFavoriteMatch(match, favoriteTeams) : true;
         const teamOk = scopedTeam
           ? match.homeAbbr === scopedTeam.abbr || match.awayAbbr === scopedTeam.abbr
           : true;
-        return leagueOk && dateOk && teamOk;
+        return leagueOk && dateOk && favoriteOk && teamOk;
       })
       .sort((left, right) => {
         const leftFavorite = isFavoriteMatch(left, favoriteTeams);
@@ -132,7 +161,7 @@ function App() {
 
         return left.id - right.id;
       });
-  }, [apiState.matches, dateFilter, favoriteTeams, kboReferenceDate, leagueFilter, scheduleTeamKey]);
+  }, [apiState.matches, dateFilter, favoriteTeams, favoritesOnly, kboReferenceDate, leagueFilter, scheduleTeamKey]);
 
   const leagueMatches = useMemo(() => {
     return apiState.matches.filter((match) => leagueFilter === 'ALL' || match.league === leagueFilter);
@@ -140,8 +169,8 @@ function App() {
 
   const teamProfiles = useMemo(() => {
     return getLeagueTeams(leagueFilter).sort((left, right) => {
-      const leftFavorite = favoriteTeams.includes(left.abbr);
-      const rightFavorite = favoriteTeams.includes(right.abbr);
+      const leftFavorite = isFavoriteTeam(favoriteTeams, left.league, left.abbr);
+      const rightFavorite = isFavoriteTeam(favoriteTeams, right.league, right.abbr);
       if (leftFavorite !== rightFavorite) {
         return leftFavorite ? -1 : 1;
       }
@@ -186,9 +215,20 @@ function App() {
     }
   }, [selectedTeamKey, visibleTeamProfiles]);
 
+  useEffect(() => {
+    if (favoriteTeams.length === 0 && favoritesOnly) {
+      setFavoritesOnly(false);
+    }
+  }, [favoriteTeams.length, favoritesOnly]);
+
+  useEffect(() => {
+    setKboStatViewTab('batting');
+    setKboStatTeamSide('away');
+  }, [selectedMatchId]);
+
   const selectedMatch = filteredMatches.find((match) => match.id === selectedMatchId) ?? filteredMatches[0] ?? null;
   const favoriteProfiles = favoriteTeams
-    .map((abbr) => getTeamByAbbr(abbr, resolveLeagueFromAbbr(abbr)) ?? getTeamByAbbr(abbr))
+    .map((favorite) => resolveFavoriteTeam(favorite))
     .filter((team): team is TeamCatalogEntry => Boolean(team));
   const favoriteBrands = favoriteProfiles.map((team) => ({
     ...getTeamBrand(team.name, team.abbr, team.league),
@@ -197,6 +237,58 @@ function App() {
   }));
   const selectedTeam = (getTeamByKey(selectedTeamKey) ?? teamProfiles[0] ?? null) as TeamCatalogEntry | null;
   const scopedScheduleTeam = (scheduleTeamKey ? getTeamByKey(scheduleTeamKey) : null) as TeamCatalogEntry | null;
+  const favoriteMatches = useMemo(() => {
+    return apiState.matches
+      .filter((match) => isFavoriteMatch(match, favoriteTeams))
+      .sort(sortMatchesForFocus)
+      .slice(0, 6);
+  }, [apiState.matches, favoriteTeams]);
+  const leagueInsights = useMemo(() => {
+    return (leagueFilters.filter((filter): filter is League => filter !== 'ALL')).map((league) => {
+      const matches = apiState.matches.filter((match) => match.league === league);
+      const teams = getLeagueTeams(league);
+      return {
+        league,
+        matches: matches.length,
+        live: matches.filter((match) => match.status === 'LIVE').length,
+        final: matches.filter((match) => match.status === 'FINAL').length,
+        upcoming: matches.filter((match) => match.status === 'UPCOMING').length,
+        favorites: teams.filter((team) => isFavoriteTeam(favoriteTeams, team.league, team.abbr)).length,
+      };
+    });
+  }, [apiState.matches, favoriteTeams]);
+  const selectedKboTable = useMemo(() => {
+    if (!kboBoxScoreState.boxScore || !selectedMatch || selectedMatch.league !== 'KBO') {
+      return null;
+    }
+
+    if (kboStatViewTab === 'batting') {
+      return kboStatTeamSide === 'away' ? kboBoxScoreState.boxScore.awayHitters : kboBoxScoreState.boxScore.homeHitters;
+    }
+
+    return kboStatTeamSide === 'away' ? kboBoxScoreState.boxScore.awayPitchers : kboBoxScoreState.boxScore.homePitchers;
+  }, [kboBoxScoreState.boxScore, kboStatTeamSide, kboStatViewTab, selectedMatch]);
+
+  const selectedKboTitle = useMemo(() => {
+    if (!selectedMatch || selectedMatch.league !== 'KBO') {
+      return '';
+    }
+
+    const teamName = kboStatTeamSide === 'away' ? selectedMatch.awayTeam : selectedMatch.homeTeam;
+    const category = kboStatViewTab === 'batting' ? '타자 기록' : '투수 기록';
+    return `${teamName} ${category}`;
+  }, [kboStatTeamSide, kboStatViewTab, selectedMatch]);
+  const visibleKboTable = useMemo(() => {
+    if (!selectedKboTable) {
+      return null;
+    }
+
+    if (kboStatViewTab !== 'pitching') {
+      return selectedKboTable;
+    }
+
+    return omitKboTableColumns(selectedKboTable, ['등판', '승', '패', '세']);
+  }, [kboStatViewTab, selectedKboTable]);
 
   const teamGames = useMemo(() => {
     if (!selectedTeam) {
@@ -243,18 +335,22 @@ function App() {
       });
 
       try {
-        const response = await fetch(
+        if (!selectedTeam) return;
+        const response = await fetchApi(
           `/api/team-news?team=${encodeURIComponent(selectedTeam.name)}&league=${encodeURIComponent(
             selectedTeam.league,
           )}&query=${encodeURIComponent(selectedTeam.newsQuery)}`,
         );
-        const payload = (await response.json()) as {
-          articles?: TeamNewsArticle[];
-          message?: string;
-        };
+        const text = await response.text();
+        let payload: { articles?: TeamNewsArticle[]; message?: string } | null = null;
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          payload = null;
+        }
 
-        if (!response.ok) {
-          throw new Error(payload.message ?? '팀 뉴스를 불러오지 못했습니다.');
+        if (!response.ok || !payload) {
+          throw new Error(payload?.message ?? '팀 뉴스를 불러오지 못했습니다.');
         }
 
         if (!cancelled) {
@@ -296,6 +392,7 @@ function App() {
     let cancelled = false;
 
     async function fetchKboBoxScore() {
+      if (!selectedMatch) return;
       setKboBoxScoreState({
         loading: true,
         message: null,
@@ -308,13 +405,19 @@ function App() {
           gameId: selectedMatch.externalGameId ?? '',
           seasonId: selectedMatch.seasonId ?? selectedMatch.startDate?.slice(0, 4) ?? '',
           seriesId: selectedMatch.seriesId ?? '0',
-          gameDate: selectedMatch.startDate?.slice(0, 10).replaceAll('-', '') ?? '',
+          gameDate: selectedMatch.startDate ? selectedMatch.startDate.slice(0, 10).replace(/-/g, '') : '',
         });
-        const response = await fetch(`/api/kbo-boxscore?${query.toString()}`);
-        const payload = (await response.json()) as KboBoxScoreResponse;
+        const response = await fetchApi(`/api/kbo-boxscore?${query.toString()}`);
+        const text = await response.text();
+        let payload: KboBoxScoreResponse | null = null;
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          payload = null;
+        }
 
-        if (!response.ok) {
-          throw new Error(payload.message ?? 'KBO 박스스코어를 불러오지 못했습니다.');
+        if (!response.ok || !payload) {
+          throw new Error(payload?.message ?? 'KBO 박스스코어를 불러오지 못했습니다.');
         }
 
         if (!cancelled) {
@@ -363,15 +466,21 @@ function App() {
     }
 
     try {
-      const response = await fetch('/api/scoreboard');
-      const payload = (await response.json()) as ApiState;
+      const response = await fetchApi('/api/scoreboard');
+      const text = await response.text();
+      let payload: ApiState | null = null;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
 
-      if (!response.ok) {
-        throw new Error(payload.message ?? '점수 데이터를 불러오지 못했습니다.');
+      if (!response.ok || !payload) {
+        throw new Error(payload?.message ?? '점수 데이터를 불러오지 못했습니다.');
       }
 
       setApiState({
-        matches: payload.matches,
+        matches: mergeLiveMatches(payload.matches ?? []),
         lastUpdated: payload.lastUpdated,
         source: payload.source,
         message: payload.message,
@@ -380,7 +489,7 @@ function App() {
       const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
       setApiState((current) => ({
         ...current,
-        matches: current.matches,
+        matches: current.matches.length > 0 ? current.matches : initialMatches,
         message,
       }));
     } finally {
@@ -390,14 +499,19 @@ function App() {
     }
   }
 
-  function toggleFavorite(teamAbbr?: string) {
+  function toggleFavorite(teamAbbr?: string, league?: League) {
     if (!teamAbbr) {
       return;
     }
 
-    setFavoriteTeams((current) =>
-      current.includes(teamAbbr) ? current.filter((abbr) => abbr !== teamAbbr) : [...current, teamAbbr],
-    );
+    const key = buildFavoriteKey(league, teamAbbr);
+    setFavoriteTeams((current) => {
+      const active = current.includes(key) || current.includes(teamAbbr);
+      if (active) {
+        return current.filter((favorite) => favorite !== key && favorite !== teamAbbr);
+      }
+      return [...current, key];
+    });
   }
 
   return (
@@ -418,7 +532,10 @@ function App() {
               <button
                 key={filter}
                 className={`top-pill ${leagueFilter === filter ? 'active' : ''}`}
-                onClick={() => setLeagueFilter(filter)}
+                onClick={() => {
+                  setLeagueFilter(filter);
+                  setScheduleTeamKey(null);
+                }}
               >
                 {filter === 'ALL' ? 'All Leagues' : filter}
               </button>
@@ -465,6 +582,72 @@ function App() {
           </article>
         ))}
       </section>
+
+      <section className="league-focus">
+        <div className="panel-header">
+          <div>
+            <p className="section-label">League Focus</p>
+            <h2>{leagueFilter === 'ALL' ? 'All League Rooms' : `${leagueFilter} Room`}</h2>
+          </div>
+          <span className="match-count">NBA · NFL · KBO</span>
+        </div>
+        <div className="league-focus-grid">
+          {leagueInsights.map((insight) => (
+            <button
+              key={insight.league}
+              className={`league-focus-card ${leagueFilter === insight.league ? 'active' : ''}`}
+              onClick={() => {
+                setLeagueFilter(insight.league);
+                setScheduleTeamKey(null);
+              }}
+            >
+              <span>{insight.league}</span>
+              <strong>{insight.matches} games</strong>
+              <small>
+                Live {insight.live} · Final {insight.final} · Upcoming {insight.upcoming}
+              </small>
+              <em>{insight.favorites} favorite teams</em>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {favoriteMatches.length > 0 ? (
+        <section className="favorite-focus">
+          <div className="panel-header">
+            <div>
+              <p className="section-label">Favorite Watch</p>
+              <h2>My Teams Today</h2>
+            </div>
+            <button
+              className={`inline-filter ${favoritesOnly ? 'active' : ''}`}
+              onClick={() => setFavoritesOnly((current) => !current)}
+            >
+              {favoritesOnly ? 'Showing Favorites' : 'Show Favorites Only'}
+            </button>
+          </div>
+          <div className="favorite-match-grid">
+            {favoriteMatches.map((match) => (
+              <button
+                key={match.id}
+                className="favorite-match-card"
+                onClick={() => {
+                  setLeagueFilter(match.league);
+                  setDateFilter(resolveMatchBucket(match));
+                  setScheduleTeamKey(null);
+                  setSelectedMatchId(match.id);
+                }}
+              >
+                <span className={`badge ${match.status.toLowerCase()}`}>{renderCenterStatus(match)}</span>
+                <strong>
+                  {match.awayTeam} {match.awayScore} : {match.homeScore} {match.homeTeam}
+                </strong>
+                <small>{match.startTime}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {teamProfiles.length > 0 ? (
         <section className="team-strip">
@@ -545,6 +728,14 @@ function App() {
                 {dateFilterLabel[filter]}
               </button>
             ))}
+            {favoriteTeams.length > 0 ? (
+              <button
+                className={`schedule-tab ${favoritesOnly ? 'active' : ''}`}
+                onClick={() => setFavoritesOnly((current) => !current)}
+              >
+                Favorites Only
+              </button>
+            ) : null}
           </div>
 
           <div className="match-list">
@@ -627,68 +818,29 @@ function App() {
                 <button className={detailTab === 'standings' ? 'active' : ''} onClick={() => setDetailTab('standings')}>
                   Standings
                 </button>
+                <button className={detailTab === 'records' ? 'active' : ''} onClick={() => setDetailTab('records')}>
+                  Batter/Pitcher
+                </button>
               </div>
 
               {detailTab === 'stats' ? (
-                <>
-                  <div className="detail-grid">
-                    <section className="detail-card">
-                      <h4>Quick Notes</h4>
-                      <div className="notes-grid">
-                        <div>
-                          <span>League</span>
-                          <strong>{selectedMatch.league}</strong>
-                        </div>
-                        <div>
-                          <span>Last Update</span>
-                          <strong>{selectedMatch.lastUpdated}</strong>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="detail-card">
+                <section className="detail-card team-stats-card">
+                  <div className="team-stats-header">
+                    <div>
                       <h4>Team Stats</h4>
-                      <div className="bar-list">
-                        {selectedMatch.keyStats.map((stat) => (
-                          <StatBar key={stat.label} stat={stat} />
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-
-                  {selectedMatch.league === 'KBO' ? (
-                    <div className="kbo-boxscore-stack">
-                      {kboBoxScoreState.loading ? <div className="empty-card">KBO 타자/투수 기록을 불러오는 중입니다.</div> : null}
-                      {!kboBoxScoreState.loading && !kboBoxScoreState.boxScore ? (
-                        <div className="empty-card">{kboBoxScoreState.message ?? '표시할 KBO 타자/투수 기록이 없습니다.'}</div>
-                      ) : null}
-                      {kboBoxScoreState.boxScore ? (
-                        <>
-                          {kboBoxScoreState.boxScore.notes.length > 0 ? (
-                            <section className="detail-card">
-                              <h4>Game Notes</h4>
-                              <div className="kbo-note-list">
-                                {kboBoxScoreState.boxScore.notes.map((note) => (
-                                  <div key={`${note.label}-${note.value}`} className="kbo-note-item">
-                                    <span>{note.label}</span>
-                                    <strong>{note.value}</strong>
-                                  </div>
-                                ))}
-                              </div>
-                            </section>
-                          ) : null}
-
-                          <div className="kbo-table-grid">
-                            <KboRecordTable title={`${selectedMatch.awayTeam} 타자 기록`} table={kboBoxScoreState.boxScore.awayHitters} />
-                            <KboRecordTable title={`${selectedMatch.homeTeam} 타자 기록`} table={kboBoxScoreState.boxScore.homeHitters} />
-                            <KboRecordTable title={`${selectedMatch.awayTeam} 투수 기록`} table={kboBoxScoreState.boxScore.awayPitchers} />
-                            <KboRecordTable title={`${selectedMatch.homeTeam} 투수 기록`} table={kboBoxScoreState.boxScore.homePitchers} />
-                          </div>
-                        </>
-                      ) : null}
+                      <span>{selectedMatch.league} · {selectedMatch.lastUpdated}</span>
                     </div>
-                  ) : null}
-                </>
+                    <div className="team-stats-sides">
+                      <span>원정 · {selectedMatch.awayAbbr ?? selectedMatch.awayTeam}</span>
+                      <span>홈 · {selectedMatch.homeAbbr ?? selectedMatch.homeTeam}</span>
+                    </div>
+                  </div>
+                  <div className="bar-list">
+                    {selectedMatch.keyStats.map((stat) => (
+                      <StatBar key={stat.label} stat={stat} match={selectedMatch} />
+                    ))}
+                  </div>
+                </section>
               ) : null}
 
               {detailTab === 'play' ? (
@@ -719,6 +871,77 @@ function App() {
                     </div>
                   </div>
                 </section>
+              ) : null}
+
+              {detailTab === 'records' ? (
+                selectedMatch.league === 'KBO' ? (
+                  <div className="kbo-boxscore-stack">
+                    {kboBoxScoreState.loading ? <div className="empty-card">KBO 타자/투수 기록을 불러오는 중입니다.</div> : null}
+                    {!kboBoxScoreState.loading && !kboBoxScoreState.boxScore ? (
+                      <div className="empty-card">{kboBoxScoreState.message ?? '표시할 KBO 타자/투수 기록이 없습니다.'}</div>
+                    ) : null}
+                    {kboBoxScoreState.boxScore ? (
+                      <>
+                        {kboBoxScoreState.boxScore.notes.length > 0 ? (
+                          <section className="detail-card">
+                            <h4>Game Notes</h4>
+                            <div className="kbo-note-list">
+                              {kboBoxScoreState.boxScore.notes.map((note) => (
+                                <div key={`${note.label}-${note.value}`} className="kbo-note-item">
+                                  <span>{note.label}</span>
+                                  <strong>{note.value}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        ) : null}
+
+                        <section className="detail-card">
+                          <div className="kbo-toolbar">
+                            <div className="kbo-toolbar-section">
+                              <span className="kbo-toolbar-label">기록 유형</span>
+                              <div className="kbo-toolbar-group">
+                                <button
+                                  className={`kbo-pill ${kboStatViewTab === 'batting' ? 'active' : ''}`}
+                                  onClick={() => setKboStatViewTab('batting')}
+                                >
+                                  타자 기록
+                                </button>
+                                <button
+                                  className={`kbo-pill ${kboStatViewTab === 'pitching' ? 'active' : ''}`}
+                                  onClick={() => setKboStatViewTab('pitching')}
+                                >
+                                  투수 기록
+                                </button>
+                              </div>
+                            </div>
+                            <div className="kbo-toolbar-section team-select">
+                              <span className="kbo-toolbar-label">팀 선택</span>
+                              <div className="kbo-toolbar-group">
+                                <button
+                                  className={`kbo-pill team-pill ${kboStatTeamSide === 'away' ? 'active' : ''}`}
+                                  onClick={() => setKboStatTeamSide('away')}
+                                >
+                                  {selectedMatch.awayTeam}
+                                </button>
+                                <button
+                                  className={`kbo-pill team-pill ${kboStatTeamSide === 'home' ? 'active' : ''}`}
+                                  onClick={() => setKboStatTeamSide('home')}
+                                >
+                                  {selectedMatch.homeTeam}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+
+                        {visibleKboTable ? <KboRecordTable title={selectedKboTitle} table={visibleKboTable} /> : null}
+                      </>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="empty-card">투타 기록 탭은 현재 KBO 경기에서만 제공됩니다.</div>
+                )
               ) : null}
             </>
           ) : (
@@ -799,9 +1022,12 @@ function App() {
                 ) : null}
                 {teamNewsState.articles.map((article) => (
                   <a key={`${article.link}-${article.pubDate}`} className="news-card" href={article.link} target="_blank" rel="noreferrer">
-                    <span className="news-source">{article.source || selectedTeam.name}</span>
+                    <div className="news-card-meta">
+                      <span className="news-category">{article.category ?? 'News'}</span>
+                      <span className="news-source">{article.source || selectedTeam.name}</span>
+                    </div>
                     <h3>{article.title}</h3>
-                    <p>{article.pubDate}</p>
+                    <p>{article.displayDate || formatNewsDate(article.pubDate)}</p>
                   </a>
                 ))}
               </section>
@@ -824,11 +1050,11 @@ function MatchTeam({
   side: 'away' | 'home';
   match: Match;
   favoriteTeams: string[];
-  onToggleFavorite: (teamAbbr?: string) => void;
+  onToggleFavorite: (teamAbbr?: string, league?: League) => void;
 }) {
   const team = side === 'away' ? match.awayTeam : match.homeTeam;
   const abbr = side === 'away' ? match.awayAbbr : match.homeAbbr;
-  const favorite = abbr ? favoriteTeams.includes(abbr) : false;
+  const favorite = isFavoriteTeam(favoriteTeams, match.league, abbr);
 
   return (
     <div className="match-team">
@@ -841,7 +1067,7 @@ function MatchTeam({
         className={`favorite-toggle ${favorite ? 'active' : ''}`}
         onClick={(event) => {
           event.stopPropagation();
-          onToggleFavorite(abbr);
+          onToggleFavorite(abbr, match.league);
         }}
         aria-label={`${team} 즐겨찾기`}
       >
@@ -860,17 +1086,17 @@ function HeroTeam({
   side: 'away' | 'home';
   match: Match;
   favoriteTeams: string[];
-  onToggleFavorite: (teamAbbr?: string) => void;
+  onToggleFavorite: (teamAbbr?: string, league?: League) => void;
 }) {
   const team = side === 'away' ? match.awayTeam : match.homeTeam;
   const abbr = side === 'away' ? match.awayAbbr : match.homeAbbr;
   const record = side === 'away' ? match.awayRecord : match.homeRecord;
   const score = side === 'away' ? match.awayScore : match.homeScore;
-  const favorite = abbr ? favoriteTeams.includes(abbr) : false;
+  const favorite = isFavoriteTeam(favoriteTeams, match.league, abbr);
 
   return (
     <div className="hero-team">
-      <button className={`favorite-toggle hero-favorite ${favorite ? 'active' : ''}`} onClick={() => onToggleFavorite(abbr)}>
+      <button className={`favorite-toggle hero-favorite ${favorite ? 'active' : ''}`} onClick={() => onToggleFavorite(abbr, match.league)}>
         ★
       </button>
       <TeamEmblem team={team} abbr={abbr} league={match.league} size="lg" />
@@ -915,12 +1141,13 @@ function TeamGameCard({ match, selectedTeamAbbr }: { match: Match; selectedTeamA
 
 function KboRecordTable({ title, table }: { title: string; table: KboBoxScoreTable }) {
   const headers = table.headers;
+  const compact = headers.includes('평균자책점');
 
   return (
     <section className="detail-card">
       <h4>{title}</h4>
       <div className="kbo-record-table-wrap">
-        <table className="kbo-record-table">
+        <table className={`kbo-record-table ${compact ? 'compact' : ''}`}>
           <thead>
             <tr>
               {headers.map((header, index) => (
@@ -952,23 +1179,57 @@ function KboRecordTable({ title, table }: { title: string; table: KboBoxScoreTab
   );
 }
 
+function omitKboTableColumns(table: KboBoxScoreTable, omittedHeaders: string[]): KboBoxScoreTable {
+  const hidden = new Set(omittedHeaders);
+  const visibleIndexes = table.headers.reduce<number[]>((indexes, header, index) => {
+    if (!hidden.has(header.trim())) {
+      indexes.push(index);
+    }
+    return indexes;
+  }, []);
+
+  if (visibleIndexes.length === table.headers.length) {
+    return table;
+  }
+
+  const pickCells = (cells: string[]) => visibleIndexes.map((index) => cells[index] ?? '');
+
+  return {
+    ...table,
+    headers: pickCells(table.headers),
+    rows: table.rows.map(pickCells),
+    footer: table.footer ? pickCells(table.footer) : undefined,
+  };
+}
+
 function StatBar({
   stat,
+  match,
 }: {
   stat: Match['keyStats'][number];
+  match: Match;
 }) {
-  const away = typeof stat.awayValue === 'number' ? stat.awayValue : 0;
-  const home = typeof stat.homeValue === 'number' ? stat.homeValue : 0;
+  const hasSplitValues = typeof stat.awayValue === 'number' && typeof stat.homeValue === 'number';
+  const away = hasSplitValues ? stat.awayValue ?? 0 : 0;
+  const home = hasSplitValues ? stat.homeValue ?? 0 : 0;
   const total = away + home || 1;
+  const awayDisplay = hasSplitValues ? String(stat.awayValue) : stat.value;
+  const homeDisplay = hasSplitValues ? String(stat.homeValue) : '';
 
   return (
     <div className="stat-card-row">
       <div className="stat-card-values">
-        <strong>{typeof stat.awayValue === 'number' ? stat.awayValue : stat.value}</strong>
-        <span>{stat.label}</span>
-        <strong>{typeof stat.homeValue === 'number' ? stat.homeValue : ''}</strong>
+        <div className="stat-side away-side">
+          <span>원정 · {match.awayAbbr ?? match.awayTeam}</span>
+          <strong>{awayDisplay}</strong>
+        </div>
+        <span className="stat-label">{stat.label}</span>
+        <div className="stat-side home-side">
+          <span>홈 · {match.homeAbbr ?? match.homeTeam}</span>
+          <strong>{homeDisplay}</strong>
+        </div>
       </div>
-      {typeof stat.awayValue === 'number' && typeof stat.homeValue === 'number' ? (
+      {hasSplitValues ? (
         <div className="split-bar">
           <span className="away-bar" style={{ width: `${(away / total) * 100}%` }} />
           <span className="home-bar" style={{ width: `${(home / total) * 100}%` }} />
@@ -976,6 +1237,21 @@ function StatBar({
       ) : null}
     </div>
   );
+}
+
+function mergeLiveMatches(liveMatches: Match[]): Match[] {
+  const leagues: League[] = ['NBA', 'NFL', 'KBO'];
+  const result: Match[] = [...liveMatches];
+
+  for (const league of leagues) {
+    const hasLiveForLeague = liveMatches.some((match) => match.league === league);
+    if (!hasLiveForLeague) {
+      const fallbackMatches = initialMatches.filter((seed: Match) => seed.league === league);
+      result.push(...fallbackMatches);
+    }
+  }
+
+  return result;
 }
 
 function inferDateBucket(match: Match): ScheduleBucket {
@@ -990,17 +1266,12 @@ function matchesScheduleBucket(match: Match, bucket: ScheduleBucket, kboReferenc
     return resolveMatchBucket(match) === bucket;
   }
 
-  if (match.league === 'KBO') {
-    const diff = getDayDiff(match.startDate, kboReferenceDate);
-    if (bucket === 'TODAY') return diff === 0;
-    if (bucket === 'YESTERDAY') return diff === -1;
-    return diff === 1;
-  }
+  const referenceDate = match.league === 'KBO' ? kboReferenceDate : new Date().toISOString();
+  const diff = getDayDiff(match.startDate, referenceDate);
 
-  const diff = getDayDiff(match.startDate, new Date().toISOString());
   if (bucket === 'TODAY') return diff === 0;
-  if (bucket === 'YESTERDAY') return diff === -1;
-  return diff === 1;
+  if (bucket === 'YESTERDAY') return diff <= -1;
+  return diff >= 1;
 }
 
 function resolveMatchBucket(match: Match): ScheduleBucket {
@@ -1061,7 +1332,60 @@ function renderCenterStatus(match: Match) {
 }
 
 function isFavoriteMatch(match: Match, favorites: string[]) {
-  return favorites.includes(match.homeAbbr ?? '') || favorites.includes(match.awayAbbr ?? '');
+  return (
+    isFavoriteTeam(favorites, match.league, match.homeAbbr) ||
+    isFavoriteTeam(favorites, match.league, match.awayAbbr)
+  );
+}
+
+function isFavoriteTeam(favorites: string[], league?: League, abbr?: string) {
+  if (!abbr) {
+    return false;
+  }
+
+  return favorites.includes(buildFavoriteKey(league, abbr)) || favorites.includes(abbr);
+}
+
+function buildFavoriteKey(league?: League, abbr?: string) {
+  return league && abbr ? `${league}:${abbr}` : abbr ?? '';
+}
+
+function resolveFavoriteTeam(favorite: string) {
+  if (favorite.includes(':')) {
+    return getTeamByKey(favorite);
+  }
+
+  return getTeamByAbbr(favorite, resolveLeagueFromAbbr(favorite)) ?? getTeamByAbbr(favorite);
+}
+
+function sortMatchesForFocus(left: Match, right: Match) {
+  const statusRank: Record<Match['status'], number> = {
+    LIVE: 0,
+    UPCOMING: 1,
+    FINAL: 2,
+  };
+
+  const statusDiff = statusRank[left.status] - statusRank[right.status];
+  if (statusDiff !== 0) {
+    return statusDiff;
+  }
+
+  return sortByDateAsc(left, right);
+}
+
+function formatNewsDate(pubDate: string) {
+  const parsed = Date.parse(pubDate);
+  if (!Number.isFinite(parsed)) {
+    return pubDate;
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(parsed));
 }
 
 function sortByDateDesc(left: Match, right: Match) {

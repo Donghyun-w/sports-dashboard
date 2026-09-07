@@ -34,12 +34,30 @@ export type Match = {
   lastUpdated: string;
 };
 
-export type KboBoxScoreTable = {
+export type BoxScoreTable = {
   title: string;
   headers: string[];
   rows: string[][];
   footer?: string[];
 };
+
+export type BoxScoreCategory = {
+  key: string;
+  name: string;
+  awayTable: BoxScoreTable;
+  homeTable: BoxScoreTable;
+};
+
+export type LeagueBoxScore = {
+  league: League;
+  notes?: Array<{
+    label: string;
+    value: string;
+  }>;
+  categories: BoxScoreCategory[];
+};
+
+export type KboBoxScoreTable = BoxScoreTable;
 
 export type KboBoxScore = {
   notes: Array<{

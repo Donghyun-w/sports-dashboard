@@ -1,8 +1,8 @@
 import { createServer } from 'node:http';
-import { fetchNbaGames, fetchNflGames } from './balldontlie.mjs';
+import { fetchEspnNbaScoreboard, fetchEspnNflScoreboard, fetchNbaGames, fetchNflGames } from './balldontlie.mjs';
 import { fetchKboBoxScore, fetchKboScoreboard } from './kbo.mjs';
 import { fetchTeamNews } from './news.mjs';
-import { transformNbaGames, transformNflGames } from './transformers.mjs';
+import { transformEspnEvents, transformNbaGames, transformNflGames } from './transformers.mjs';
 
 const API_KEY = process.env.BALLDONTLIE_API_KEY;
 const PORT = Number(process.env.PORT || 8787);
@@ -15,43 +15,78 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function dedupeMatches(matches) {
+  const map = new Map();
+  matches.forEach((m) => {
+    const key = `${m.league}:${m.startDate?.slice(0, 10)}:${m.homeAbbr}:${m.awayAbbr}`;
+    if (!map.has(key)) {
+      map.set(key, m);
+    }
+  });
+  return Array.from(map.values());
+}
+
 async function handleScoreboard(response) {
   try {
     const tasks = [];
 
-    if (API_KEY) {
-      tasks.push(
-        Promise.all([fetchNbaGames(API_KEY), fetchNflGames(API_KEY)]).then(([nbaPayload, nflPayload]) => [
-          ...transformNbaGames(nbaPayload),
-          ...transformNflGames(nflPayload),
-        ]),
-      );
-    }
+    // 1. NBA: ESPN Scoreboard + BallDontLie
+    tasks.push(
+      (async () => {
+        const results = [];
+        const espnEvents = await fetchEspnNbaScoreboard().catch(() => []);
+        if (espnEvents.length > 0) {
+          results.push(...transformEspnEvents(espnEvents, 'NBA'));
+        }
+        if (API_KEY) {
+          const bdlData = await fetchNbaGames(API_KEY).catch(() => ({ data: [] }));
+          if (bdlData.data?.length > 0) {
+            results.push(...transformNbaGames(bdlData));
+          }
+        }
+        return dedupeMatches(results);
+      })(),
+    );
 
-    tasks.push(fetchKboScoreboard());
+    // 2. NFL: ESPN Scoreboard + BallDontLie
+    tasks.push(
+      (async () => {
+        const results = [];
+        const espnEvents = await fetchEspnNflScoreboard().catch(() => []);
+        if (espnEvents.length > 0) {
+          results.push(...transformEspnEvents(espnEvents, 'NFL'));
+        }
+        if (API_KEY) {
+          const bdlData = await fetchNflGames(API_KEY).catch(() => ({ data: [] }));
+          if (bdlData.data?.length > 0) {
+            results.push(...transformNflGames(bdlData));
+          }
+        }
+        return dedupeMatches(results);
+      })(),
+    );
+
+    // 3. KBO: Official Scraper
+    tasks.push(
+      fetchKboScoreboard().catch((error) => {
+        console.error('KBO fetch error:', error?.message || error);
+        return [];
+      }),
+    );
 
     const settled = await Promise.allSettled(tasks);
-    const matches = settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
-    const hasBallDontLie = API_KEY && settled[0]?.status === 'fulfilled';
-    const hasBallDontLieMatches = matches.some((match) => match.league === 'NBA' || match.league === 'NFL');
-    const hasKbo = settled.some((result) => result.status === 'fulfilled' && result.value.some((match) => match.league === 'KBO'));
-    const failures = settled.filter((result) => result.status === 'rejected');
+    const matches = settled.flatMap((result) => (result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
+    const hasNbaMatches = matches.some((match) => match.league === 'NBA');
+    const hasNflMatches = matches.some((match) => match.league === 'NFL');
+    const hasKboMatches = matches.some((match) => match.league === 'KBO');
     const messageParts = [];
 
-    if (hasBallDontLieMatches) {
-      messageParts.push('NBA/NFL 실데이터 연결 완료');
-    } else if (hasBallDontLie) {
-      messageParts.push('NBA/NFL 현재 일정 없음');
-    } else if (!API_KEY) {
-      messageParts.push('NBA/NFL은 API 키가 없어 데모를 사용 중');
-    }
-
-    if (hasKbo) {
-      messageParts.push('KBO 공식 스코어보드 실시간 반영');
-    }
-
-    if (failures.length > 0) {
-      messageParts.push('일부 소스는 일시적으로 불안정할 수 있음');
+    if (hasNbaMatches && hasNflMatches && hasKboMatches) {
+      messageParts.push('NBA · NFL · KBO 전 리그 실시간 데이터 수신 중');
+    } else {
+      if (hasNbaMatches) messageParts.push('NBA 실시간 라이브 연동');
+      if (hasNflMatches) messageParts.push('NFL 실시간 라이브 연동');
+      if (hasKboMatches) messageParts.push('KBO 공식 스코어보드 실시간 반영');
     }
 
     sendJson(response, 200, {
@@ -171,6 +206,6 @@ const server = createServer(async (request, response) => {
   sendJson(response, 404, { message: 'Not found' });
 });
 
-server.listen(PORT, () => {
-  console.log(`Scoreboard API listening on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Scoreboard API listening on http://127.0.0.1:${PORT}`);
 });
