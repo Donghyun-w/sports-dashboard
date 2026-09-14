@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { KboBoxScoreResponse } from './api';
+import type { BoxScoreResponse } from './api';
 import { initialMatches } from './data';
 import { getLeagueTeams, getTeamByAbbr, getTeamByKey, resolveLeagueFromAbbr, type TeamCatalogEntry } from './teamCatalog';
 import { getTeamBrand, TeamEmblem } from './teamBranding';
-import type { KboBoxScore, KboBoxScoreTable, League, Match, ScheduleBucket } from './types';
+import type { BoxScoreCategory, BoxScoreTable, League, Match, LeagueBoxScore, ScheduleBucket } from './types';
 
 type LeagueFilter = 'ALL' | League;
 type DetailTab = 'stats' | 'play' | 'standings' | 'records';
 type TeamViewTab = 'recent' | 'upcoming' | 'news';
-type KboStatViewTab = 'batting' | 'pitching';
 
 type ApiState = {
   matches: Match[];
@@ -93,19 +92,19 @@ function App() {
     message: null,
     articles: [],
   });
-  const [kboBoxScoreState, setKboBoxScoreState] = useState<{
+  const [boxScoreState, setBoxScoreState] = useState<{
     loading: boolean;
     message: string | null;
-    boxScore: KboBoxScore | null;
-    gameId: string | null;
+    boxScore: LeagueBoxScore | null;
+    matchKey: string | null;
   }>({
     loading: false,
     message: null,
     boxScore: null,
-    gameId: null,
+    matchKey: null,
   });
-  const [kboStatViewTab, setKboStatViewTab] = useState<KboStatViewTab>('batting');
-  const [kboStatTeamSide, setKboStatTeamSide] = useState<'away' | 'home'>('away');
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string>('');
+  const [boxScoreTeamSide, setBoxScoreTeamSide] = useState<'away' | 'home'>('away');
 
   useEffect(() => {
     void fetchScoreboard();
@@ -222,8 +221,8 @@ function App() {
   }, [favoriteTeams.length, favoritesOnly]);
 
   useEffect(() => {
-    setKboStatViewTab('batting');
-    setKboStatTeamSide('away');
+    setSelectedCategoryKey('');
+    setBoxScoreTeamSide('away');
   }, [selectedMatchId]);
 
   const selectedMatch = filteredMatches.find((match) => match.id === selectedMatchId) ?? filteredMatches[0] ?? null;
@@ -257,38 +256,22 @@ function App() {
       };
     });
   }, [apiState.matches, favoriteTeams]);
-  const selectedKboTable = useMemo(() => {
-    if (!kboBoxScoreState.boxScore || !selectedMatch || selectedMatch.league !== 'KBO') {
-      return null;
-    }
+  const activeCategory = useMemo(() => {
+    const categories = boxScoreState.boxScore?.categories;
+    if (!categories || categories.length === 0) return null;
+    return categories.find((c) => c.key === selectedCategoryKey) ?? categories[0];
+  }, [boxScoreState.boxScore?.categories, selectedCategoryKey]);
 
-    if (kboStatViewTab === 'batting') {
-      return kboStatTeamSide === 'away' ? kboBoxScoreState.boxScore.awayHitters : kboBoxScoreState.boxScore.homeHitters;
-    }
+  const activeBoxTable = useMemo(() => {
+    if (!activeCategory) return null;
+    return boxScoreTeamSide === 'away' ? activeCategory.awayTable : activeCategory.homeTable;
+  }, [activeCategory, boxScoreTeamSide]);
 
-    return kboStatTeamSide === 'away' ? kboBoxScoreState.boxScore.awayPitchers : kboBoxScoreState.boxScore.homePitchers;
-  }, [kboBoxScoreState.boxScore, kboStatTeamSide, kboStatViewTab, selectedMatch]);
-
-  const selectedKboTitle = useMemo(() => {
-    if (!selectedMatch || selectedMatch.league !== 'KBO') {
-      return '';
-    }
-
-    const teamName = kboStatTeamSide === 'away' ? selectedMatch.awayTeam : selectedMatch.homeTeam;
-    const category = kboStatViewTab === 'batting' ? '타자 기록' : '투수 기록';
-    return `${teamName} ${category}`;
-  }, [kboStatTeamSide, kboStatViewTab, selectedMatch]);
-  const visibleKboTable = useMemo(() => {
-    if (!selectedKboTable) {
-      return null;
-    }
-
-    if (kboStatViewTab !== 'pitching') {
-      return selectedKboTable;
-    }
-
-    return omitKboTableColumns(selectedKboTable, ['등판', '승', '패', '세']);
-  }, [kboStatViewTab, selectedKboTable]);
+  const activeBoxTitle = useMemo(() => {
+    if (!selectedMatch || !activeCategory) return '';
+    const teamName = boxScoreTeamSide === 'away' ? selectedMatch.awayTeam : selectedMatch.homeTeam;
+    return `${teamName} · ${activeCategory.name}`;
+  }, [activeCategory, boxScoreTeamSide, selectedMatch]);
 
   const teamGames = useMemo(() => {
     if (!selectedTeam) {
@@ -379,37 +362,41 @@ function App() {
   }, [selectedTeam]);
 
   useEffect(() => {
-    if (selectedMatch?.league !== 'KBO' || !selectedMatch.externalGameId) {
-      setKboBoxScoreState({
+    if (!selectedMatch) {
+      setBoxScoreState({
         loading: false,
         message: null,
         boxScore: null,
-        gameId: null,
+        matchKey: null,
       });
       return;
     }
 
     let cancelled = false;
 
-    async function fetchKboBoxScore() {
+    async function fetchBoxScore() {
       if (!selectedMatch) return;
-      setKboBoxScoreState({
+      const matchKey = `${selectedMatch.league}-${selectedMatch.id}-${selectedMatch.externalGameId ?? ''}`;
+      setBoxScoreState({
         loading: true,
         message: null,
         boxScore: null,
-        gameId: selectedMatch.externalGameId ?? null,
+        matchKey,
       });
 
       try {
         const query = new URLSearchParams({
-          gameId: selectedMatch.externalGameId ?? '',
+          league: selectedMatch.league,
+          gameId: selectedMatch.externalGameId ?? String(selectedMatch.id),
+          homeTeam: selectedMatch.homeTeam,
+          awayTeam: selectedMatch.awayTeam,
           seasonId: selectedMatch.seasonId ?? selectedMatch.startDate?.slice(0, 4) ?? '',
           seriesId: selectedMatch.seriesId ?? '0',
           gameDate: selectedMatch.startDate ? selectedMatch.startDate.slice(0, 10).replace(/-/g, '') : '',
         });
-        const response = await fetchApi(`/api/kbo-boxscore?${query.toString()}`);
+        const response = await fetchApi(`/api/boxscore?${query.toString()}`);
         const text = await response.text();
-        let payload: KboBoxScoreResponse | null = null;
+        let payload: BoxScoreResponse | null = null;
         try {
           payload = JSON.parse(text);
         } catch {
@@ -417,35 +404,47 @@ function App() {
         }
 
         if (!response.ok || !payload) {
-          throw new Error(payload?.message ?? 'KBO 박스스코어를 불러오지 못했습니다.');
+          throw new Error(payload?.message ?? `${selectedMatch.league} 세부 기록을 불러오지 못했습니다.`);
         }
 
         if (!cancelled) {
-          setKboBoxScoreState({
+          setBoxScoreState({
             loading: false,
             message: payload.message,
             boxScore: payload.boxScore,
-            gameId: selectedMatch.externalGameId ?? null,
+            matchKey,
           });
+          if (payload.boxScore?.categories?.[0]) {
+            setSelectedCategoryKey(payload.boxScore.categories[0].key);
+          }
         }
       } catch (error) {
         if (!cancelled) {
-          setKboBoxScoreState({
+          setBoxScoreState({
             loading: false,
-            message: error instanceof Error ? error.message : 'KBO 박스스코어 요청 중 오류가 발생했습니다.',
+            message: error instanceof Error ? error.message : `${selectedMatch.league} 세부 기록 요청 중 오류가 발생했습니다.`,
             boxScore: null,
-            gameId: selectedMatch.externalGameId ?? null,
+            matchKey,
           });
         }
       }
     }
 
-    void fetchKboBoxScore();
+    void fetchBoxScore();
 
     return () => {
       cancelled = true;
     };
-  }, [selectedMatch?.externalGameId, selectedMatch?.league, selectedMatch?.seasonId, selectedMatch?.seriesId, selectedMatch?.startDate]);
+  }, [
+    selectedMatch?.id,
+    selectedMatch?.league,
+    selectedMatch?.externalGameId,
+    selectedMatch?.homeTeam,
+    selectedMatch?.awayTeam,
+    selectedMatch?.seasonId,
+    selectedMatch?.seriesId,
+    selectedMatch?.startDate,
+  ]);
 
   const summary = useMemo(() => {
     const liveCount = filteredMatches.filter((match) => match.status === 'LIVE').length;
@@ -819,7 +818,7 @@ function App() {
                   Standings
                 </button>
                 <button className={detailTab === 'records' ? 'active' : ''} onClick={() => setDetailTab('records')}>
-                  Batter/Pitcher
+                  Box Score
                 </button>
               </div>
 
@@ -874,74 +873,71 @@ function App() {
               ) : null}
 
               {detailTab === 'records' ? (
-                selectedMatch.league === 'KBO' ? (
-                  <div className="kbo-boxscore-stack">
-                    {kboBoxScoreState.loading ? <div className="empty-card">KBO 타자/투수 기록을 불러오는 중입니다.</div> : null}
-                    {!kboBoxScoreState.loading && !kboBoxScoreState.boxScore ? (
-                      <div className="empty-card">{kboBoxScoreState.message ?? '표시할 KBO 타자/투수 기록이 없습니다.'}</div>
-                    ) : null}
-                    {kboBoxScoreState.boxScore ? (
-                      <>
-                        {kboBoxScoreState.boxScore.notes.length > 0 ? (
-                          <section className="detail-card">
-                            <h4>Game Notes</h4>
-                            <div className="kbo-note-list">
-                              {kboBoxScoreState.boxScore.notes.map((note) => (
-                                <div key={`${note.label}-${note.value}`} className="kbo-note-item">
-                                  <span>{note.label}</span>
-                                  <strong>{note.value}</strong>
-                                </div>
-                              ))}
-                            </div>
-                          </section>
-                        ) : null}
-
+                <div className="boxscore-stack">
+                  {boxScoreState.loading ? (
+                    <div className="empty-card">{selectedMatch.league} 세부 기록(Box Score)을 불러오는 중입니다...</div>
+                  ) : null}
+                  {!boxScoreState.loading && !boxScoreState.boxScore ? (
+                    <div className="empty-card">{boxScoreState.message ?? '표시할 세부 기록이 없습니다.'}</div>
+                  ) : null}
+                  {boxScoreState.boxScore ? (
+                    <>
+                      {boxScoreState.boxScore.notes && boxScoreState.boxScore.notes.length > 0 ? (
                         <section className="detail-card">
-                          <div className="kbo-toolbar">
-                            <div className="kbo-toolbar-section">
-                              <span className="kbo-toolbar-label">기록 유형</span>
-                              <div className="kbo-toolbar-group">
-                                <button
-                                  className={`kbo-pill ${kboStatViewTab === 'batting' ? 'active' : ''}`}
-                                  onClick={() => setKboStatViewTab('batting')}
-                                >
-                                  타자 기록
-                                </button>
-                                <button
-                                  className={`kbo-pill ${kboStatViewTab === 'pitching' ? 'active' : ''}`}
-                                  onClick={() => setKboStatViewTab('pitching')}
-                                >
-                                  투수 기록
-                                </button>
+                          <h4>Game Notes & Info</h4>
+                          <div className="kbo-note-list">
+                            {boxScoreState.boxScore.notes.map((note) => (
+                              <div key={`${note.label}-${note.value}`} className="kbo-note-item">
+                                <span>{note.label}</span>
+                                <strong>{note.value}</strong>
                               </div>
-                            </div>
-                            <div className="kbo-toolbar-section team-select">
-                              <span className="kbo-toolbar-label">팀 선택</span>
-                              <div className="kbo-toolbar-group">
-                                <button
-                                  className={`kbo-pill team-pill ${kboStatTeamSide === 'away' ? 'active' : ''}`}
-                                  onClick={() => setKboStatTeamSide('away')}
-                                >
-                                  {selectedMatch.awayTeam}
-                                </button>
-                                <button
-                                  className={`kbo-pill team-pill ${kboStatTeamSide === 'home' ? 'active' : ''}`}
-                                  onClick={() => setKboStatTeamSide('home')}
-                                >
-                                  {selectedMatch.homeTeam}
-                                </button>
-                              </div>
-                            </div>
+                            ))}
                           </div>
                         </section>
+                      ) : null}
 
-                        {visibleKboTable ? <KboRecordTable title={selectedKboTitle} table={visibleKboTable} /> : null}
-                      </>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="empty-card">투타 기록 탭은 현재 KBO 경기에서만 제공됩니다.</div>
-                )
+                      <section className="detail-card">
+                        <div className="kbo-toolbar">
+                          {boxScoreState.boxScore.categories.length > 1 ? (
+                            <div className="kbo-toolbar-section">
+                              <span className="kbo-toolbar-label">기록 부문</span>
+                              <div className="kbo-toolbar-group">
+                                {boxScoreState.boxScore.categories.map((cat) => (
+                                  <button
+                                    key={cat.key}
+                                    className={`kbo-pill ${(activeCategory?.key ?? '') === cat.key ? 'active' : ''}`}
+                                    onClick={() => setSelectedCategoryKey(cat.key)}
+                                  >
+                                    {cat.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          <div className="kbo-toolbar-section team-select">
+                            <span className="kbo-toolbar-label">팀 선택</span>
+                            <div className="kbo-toolbar-group">
+                              <button
+                                className={`kbo-pill team-pill ${boxScoreTeamSide === 'away' ? 'active' : ''}`}
+                                onClick={() => setBoxScoreTeamSide('away')}
+                              >
+                                원정 · {selectedMatch.awayAbbr ?? selectedMatch.awayTeam}
+                              </button>
+                              <button
+                                className={`kbo-pill team-pill ${boxScoreTeamSide === 'home' ? 'active' : ''}`}
+                                onClick={() => setBoxScoreTeamSide('home')}
+                              >
+                                홈 · {selectedMatch.homeAbbr ?? selectedMatch.homeTeam}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      {activeBoxTable ? <BoxScoreRecordTable title={activeBoxTitle} table={activeBoxTable} /> : null}
+                    </>
+                  ) : null}
+                </div>
               ) : null}
             </>
           ) : (
@@ -1139,9 +1135,9 @@ function TeamGameCard({ match, selectedTeamAbbr }: { match: Match; selectedTeamA
   );
 }
 
-function KboRecordTable({ title, table }: { title: string; table: KboBoxScoreTable }) {
+function BoxScoreRecordTable({ title, table }: { title: string; table: BoxScoreTable }) {
   const headers = table.headers;
-  const compact = headers.includes('평균자책점');
+  const compact = headers.includes('평균자책점') || headers.length > 8;
 
   return (
     <section className="detail-card">
@@ -1179,7 +1175,7 @@ function KboRecordTable({ title, table }: { title: string; table: KboBoxScoreTab
   );
 }
 
-function omitKboTableColumns(table: KboBoxScoreTable, omittedHeaders: string[]): KboBoxScoreTable {
+function omitBoxTableColumns(table: BoxScoreTable, omittedHeaders: string[]): BoxScoreTable {
   const hidden = new Set(omittedHeaders);
   const visibleIndexes = table.headers.reduce<number[]>((indexes, header, index) => {
     if (!hidden.has(header.trim())) {

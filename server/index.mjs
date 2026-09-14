@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { fetchEspnNbaScoreboard, fetchEspnNflScoreboard, fetchNbaGames, fetchNflGames } from './balldontlie.mjs';
 import { fetchKboBoxScore, fetchKboScoreboard } from './kbo.mjs';
 import { fetchTeamNews } from './news.mjs';
+import { fetchUnifiedBoxScore } from './boxscore.mjs';
 import { transformEspnEvents, transformNbaGames, transformNflGames } from './transformers.mjs';
 
 const API_KEY = process.env.BALLDONTLIE_API_KEY;
@@ -141,6 +142,38 @@ async function handleTeamNews(requestUrl, response) {
   }
 }
 
+async function handleUnifiedBoxScore(requestUrl, response) {
+  const league = requestUrl.searchParams.get('league') ?? 'KBO';
+  const gameId = requestUrl.searchParams.get('gameId') ?? '';
+  const seasonId = requestUrl.searchParams.get('seasonId') ?? '';
+  const seriesId = requestUrl.searchParams.get('seriesId') ?? '0';
+  const gameDate = requestUrl.searchParams.get('gameDate') ?? '';
+  const homeTeam = requestUrl.searchParams.get('homeTeam') ?? '';
+  const awayTeam = requestUrl.searchParams.get('awayTeam') ?? '';
+
+  try {
+    const boxScore = await fetchUnifiedBoxScore({
+      league,
+      gameId,
+      seasonId,
+      seriesId,
+      gameDate,
+      homeTeam,
+      awayTeam,
+    });
+
+    sendJson(response, 200, {
+      boxScore,
+      message: boxScore ? `${league} 세부 기록을 불러왔습니다.` : `표시할 ${league} 세부 기록이 없습니다.`,
+    });
+  } catch (error) {
+    sendJson(response, 502, {
+      boxScore: null,
+      message: error instanceof Error ? error.message : `${league} 세부 기록 요청 중 오류가 발생했습니다.`,
+    });
+  }
+}
+
 async function handleKboBoxScore(requestUrl, response) {
   const gameId = requestUrl.searchParams.get('gameId');
   const seasonId = requestUrl.searchParams.get('seasonId') ?? '';
@@ -195,6 +228,11 @@ const server = createServer(async (request, response) => {
 
   if (request.method === 'GET' && requestUrl.pathname === '/api/team-news') {
     await handleTeamNews(requestUrl, response);
+    return;
+  }
+
+  if (request.method === 'GET' && (requestUrl.pathname === '/api/boxscore' || requestUrl.pathname === '/api/unified-boxscore')) {
+    await handleUnifiedBoxScore(requestUrl, response);
     return;
   }
 
