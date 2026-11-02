@@ -8,6 +8,7 @@ import { transformEspnEvents, transformNbaGames, transformNflGames } from './tra
 
 const API_KEY = process.env.BALLDONTLIE_API_KEY;
 const PORT = Number(process.env.PORT || 8787);
+const cachedMatchesByLeague = new Map();
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
@@ -29,6 +30,20 @@ function dedupeMatches(matches) {
     }
   });
   return Array.from(map.values());
+}
+
+function retainCachedLeagueMatches(matches) {
+  return ['NBA', 'NFL', 'KBO'].flatMap((league) => {
+    const freshMatches = matches.filter((match) => match.league === league);
+    const cachedMatches = cachedMatchesByLeague.get(league) ?? [];
+    const stableMatches = dedupeMatches([...freshMatches, ...cachedMatches]);
+
+    if (freshMatches.length > 0) {
+      cachedMatchesByLeague.set(league, stableMatches);
+    }
+
+    return stableMatches;
+  });
 }
 
 async function handleScoreboard(response) {
@@ -80,7 +95,8 @@ async function handleScoreboard(response) {
     );
 
     const settled = await Promise.allSettled(tasks);
-    const matches = settled.flatMap((result) => (result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
+    const freshMatches = settled.flatMap((result) => (result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
+    const matches = retainCachedLeagueMatches(freshMatches);
     const hasNbaMatches = matches.some((match) => match.league === 'NBA');
     const hasNflMatches = matches.some((match) => match.league === 'NFL');
     const hasKboMatches = matches.some((match) => match.league === 'KBO');

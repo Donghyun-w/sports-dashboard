@@ -483,11 +483,16 @@ function App() {
         throw new Error(payload?.message ?? '점수 데이터를 불러오지 못했습니다.');
       }
 
-      setApiState({
-        matches: mergeLiveMatches(payload.matches ?? []),
-        lastUpdated: payload.lastUpdated,
-        source: payload.source,
-        message: payload.message,
+      setApiState((current) => {
+        const cachedMatches = current.source === 'live' ? current.matches : [];
+        const matches = mergeLiveMatches(mergeScoreboardMatches(payload.matches ?? [], cachedMatches));
+
+        return {
+          matches,
+          lastUpdated: payload.lastUpdated,
+          source: payload.source === 'live' || cachedMatches.length > 0 ? 'live' : payload.source,
+          message: payload.message,
+        };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
@@ -631,7 +636,18 @@ function App() {
               <p className="section-label">Teams</p>
               <h2>Browse by Team</h2>
             </div>
-            {selectedTeam ? <span className="match-count">{selectedTeam.name}</span> : null}
+            {selectedTeam ? (
+              <div className="team-strip-actions">
+                <span className="match-count">{selectedTeam.name}</span>
+                <button
+                  className={`team-favorite-button ${isFavoriteTeam(favoriteTeams, selectedTeam.league, selectedTeam.abbr) ? 'active' : ''}`}
+                  onClick={() => toggleFavorite(selectedTeam.abbr, selectedTeam.league)}
+                  aria-pressed={isFavoriteTeam(favoriteTeams, selectedTeam.league, selectedTeam.abbr)}
+                >
+                  {isFavoriteTeam(favoriteTeams, selectedTeam.league, selectedTeam.abbr) ? '★ 즐겨찾기됨' : '☆ 즐겨찾기'}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="team-tools">
@@ -938,9 +954,11 @@ function App() {
             <h2>{selectedTeam ? selectedTeam.name : 'Select Team'}</h2>
           </div>
           {selectedTeam ? (
-            <span className="match-count">
-              {selectedTeam.league} · {teamGames.recent.length} recent / {teamGames.upcoming.length} upcoming
-            </span>
+            <div className="team-center-actions">
+              <span className="match-count">
+                {selectedTeam.league} · {teamGames.recent.length} recent / {teamGames.upcoming.length} upcoming
+              </span>
+            </div>
           ) : null}
         </div>
 
@@ -1292,6 +1310,19 @@ function mergeLiveMatches(liveMatches: Match[]): Match[] {
   }
 
   return result;
+}
+
+function mergeScoreboardMatches(freshMatches: Match[], cachedMatches: Match[]): Match[] {
+  const matchesByKey = new Map<string, Match>();
+
+  [...freshMatches, ...cachedMatches].forEach((match) => {
+    const key = `${match.league}:${match.startDate?.slice(0, 10) ?? ''}:${match.homeAbbr ?? match.homeTeam}:${match.awayAbbr ?? match.awayTeam}`;
+    if (!matchesByKey.has(key)) {
+      matchesByKey.set(key, match);
+    }
+  });
+
+  return Array.from(matchesByKey.values());
 }
 
 function inferDateBucket(match: Match): ScheduleBucket {

@@ -5,6 +5,8 @@ import { fetchUnifiedBoxScore } from './boxscore.mjs';
 import { fetchUnifiedStandings } from './standings.mjs';
 import { transformEspnEvents, transformNbaGames, transformNflGames } from './transformers.mjs';
 
+const cachedMatchesByLeague = new Map();
+
 function buildLastUpdated() {
   return new Intl.DateTimeFormat('ko-KR', {
     timeZone: 'Asia/Seoul',
@@ -25,6 +27,20 @@ function dedupeMatches(matches) {
     }
   });
   return Array.from(map.values());
+}
+
+function retainCachedLeagueMatches(matches) {
+  return ['NBA', 'NFL', 'KBO'].flatMap((league) => {
+    const freshMatches = matches.filter((match) => match.league === league);
+    const cachedMatches = cachedMatchesByLeague.get(league) ?? [];
+    const stableMatches = dedupeMatches([...freshMatches, ...cachedMatches]);
+
+    if (freshMatches.length > 0) {
+      cachedMatchesByLeague.set(league, stableMatches);
+    }
+
+    return stableMatches;
+  });
 }
 
 export async function buildScoreboardPayload(apiKey = process.env.BALLDONTLIE_API_KEY) {
@@ -76,7 +92,8 @@ export async function buildScoreboardPayload(apiKey = process.env.BALLDONTLIE_AP
     );
 
     const settled = await Promise.allSettled(tasks);
-    const matches = settled.flatMap((result) => (result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
+    const freshMatches = settled.flatMap((result) => (result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
+    const matches = retainCachedLeagueMatches(freshMatches);
     const hasNbaMatches = matches.some((match) => match.league === 'NBA');
     const hasNflMatches = matches.some((match) => match.league === 'NFL');
     const hasKboMatches = matches.some((match) => match.league === 'KBO');
