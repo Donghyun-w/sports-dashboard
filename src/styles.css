@@ -1464,3 +1464,462 @@ button {
   background: rgba(248, 113, 113, 0.15);
   color: #f87171;
 }
+
+/* Light theme */
+:root {
+  color-scheme: light;
+  color: #182235;
+  background: #f5f7fb;
+}
+
+body {
+  color: #182235;
+  background:
+    radial-gradient(circle at top, rgba(86, 124, 216, 0.13), transparent 31%),
+    linear-gradient(180deg, #fbfcff 0%, #f2f5fa 100%);
+}
+
+.hero,
+.schedule-panel,
+.detail-panel,
+.detail-card,
+.status-card,
+.match-row,
+.favorite-focus,
+.team-center,
+.team-strip {
+  border-color: #e1e7f0;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 34px rgba(39, 54, 79, 0.08);
+}
+
+.hero-description,
+.status-card p,
+.detail-meta,
+.hero-center p,
+.match-count,
+.row-foot,
+.notes-grid span,
+.timeline-row p,
+.match-team span,
+.hero-team span,
+.empty-card,
+.favorite-match-card small,
+.favorite-match-card.unavailable p,
+.favorite-recent-score span,
+.favorite-opponent span,
+.team-search span,
+.team-search-meta,
+.team-game-time,
+.news-source,
+.news-card p,
+.team-game-opponent p,
+.team-stats-header span,
+.team-stats-sides,
+.kbo-note-item span,
+.table-scroll-hint {
+  color: #69758a;
+}
+
+.favorite-chip,
+.top-pill,
+.schedule-tab,
+.detail-tabs button,
+.team-tab,
+.team-view-tabs button,
+.kbo-pill,
+.team-favorite-button {
+  border-color: #dfe5ef;
+  background: #f4f6fa;
+  color: #526076;
+}
+
+.favorite-chip {
+  background: #fff;
+  color: #273247;
+  box-shadow: 0 4px 12px rgba(39, 54, 79, 0.05);
+}
+
+.top-pill.active,
+.schedule-tab.active,
+.detail-tabs button.active,
+.team-tab.active,
+.team-view-tabs button.active,
+.kbo-pill.active,
+.refresh-button {
+  background: linear-gradient(135deg, #315eea, #2449c5);
+  color: #fff;
+}
+
+.status-chip.final,
+.badge.final {
+  background: #e9edf3;
+  color: #48566b;
+}
+
+.favorite-match-card,
+.team-game-card,
+.news-card {
+  border-color: #e3e8f0;
+  background: #f9fafc;
+  color: #182235;
+}
+
+.favorite-match-card:not(.unavailable):hover {
+  border-color: #8eabff;
+  background: #f3f6ff;
+}
+
+.schedule-scope,
+.kbo-toolbar-section.team-select,
+.boxscore-table-wrap {
+  border-color: #dbe4f2;
+  background: #f5f8ff;
+  color: #33435d;
+}
+
+.empty-action,
+.standings-refresh-mini {
+  border-color: #bdccef;
+  background: #edf3ff;
+  color: #3158b8;
+}
+
+.empty-action:hover,
+.standings-refresh-mini:hover:not(:disabled) {
+  background: #dfe9ff;
+  color: #2449a5;
+}
+
+.match-row.selected {
+  border-color: #6e92ef;
+  box-shadow: 0 0 0 1px rgba(76, 117, 224, 0.2);
+}
+
+.favorite-toggle {
+  color: #aab4c4;
+}
+
+.favorite-toggle.active,
+.favorite-mark,
+.team-favorite-button.active {
+  color: #b7791f;
+}
+
+.team-favorite-button:hover {
+  border-color: #dfb85d;
+  color: #a66d15;
+}
+
+.team-favorite-button.active {
+  border-color: #e2be6e;
+  background: #fff8e7;
+}
+
+.team-search input {
+  border-color: #dbe2ec;
+  background: #fff;
+  color: #182235;
+}
+
+.team-search input::placeholder {
+  color: #9aa5b5;
+}
+
+.team-search input:focus {
+  border-color: #7798e8;
+  box-shadow: 0 0 0 3px rgba(91, 133, 232, 0.14);
+}
+
+.news-category,
+.league-badge {
+  background: #edf3ff;
+  color: #4268ba;
+}
+
+.kbo-record-table-wrap {
+  scrollbar-color: #b9c9e8 #edf1f7;
+}
+
+.kbo-record-table-wrap::-webkit-scrollbar-track {
+  background: #edf1f7;
+}
+
+.kbo-record-table-wrap::-webkit-scrollbar-thumb {
+  background: #b9c9e8;
+}
+
+.kbo-record-table th,
+.kbo-record-table td {
+  border-bottom-color: #e7ebf1;
+  color: #3d4a60;
+}
+
+.kbo-record-table th {
+  color: #7b8799;
+}
+
+.kbo-record-table th:first-child,
+.kbo-record-table td:first-child {
+  background: #fff;
+  color: #1d293d;
+  box-shadow: 2px 0 6px rgba(35, 49, 73, 0.08);
+}
+
+.kbo-record-table tfoot td {
+  color: #1d293d;
+  background: #f7f9fc;
+}
+
+.standing-team-name {
+  color: #1d293d;
+}
+
+.standing-rank-cell {
+  color: #728097;
+}
+
+.standing-row-active {
+  background: #edf3ff !important;
+  box-shadow: inset 3px 0 0 #4f79ff;
+}
+
+.standing-row-active td {
+  color: #243a63 !important;
+}
+
+.standing-row-favorite {
+  background: #fffaf0;
+}
+
+/* Dark gray theme */
+:root {
+  color-scheme: dark;
+  color: #f4f4f5;
+  background: #0b0c0f;
+}
+
+body {
+  color: #f4f4f5;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.06), transparent 28%),
+    linear-gradient(180deg, #101114 0%, #08090b 100%);
+}
+
+.hero,
+.schedule-panel,
+.detail-panel,
+.detail-card,
+.status-card,
+.match-row,
+.favorite-focus,
+.team-center,
+.team-strip {
+  border-color: #2a2d33;
+  background: rgba(23, 25, 30, 0.94);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.26);
+}
+
+.eyebrow,
+.section-label {
+  color: #bfc3cb;
+}
+
+.hero-description,
+.status-card p,
+.detail-meta,
+.hero-center p,
+.match-count,
+.row-foot,
+.notes-grid span,
+.timeline-row p,
+.match-team span,
+.hero-team span,
+.empty-card,
+.favorite-match-card small,
+.favorite-match-card.unavailable p,
+.favorite-recent-score span,
+.favorite-opponent span,
+.team-search span,
+.team-search-meta,
+.team-game-time,
+.news-source,
+.news-card p,
+.team-game-opponent p,
+.team-stats-header span,
+.team-stats-sides,
+.kbo-note-item span,
+.table-scroll-hint {
+  color: #a3a7b0;
+}
+
+.favorite-chip,
+.top-pill,
+.schedule-tab,
+.detail-tabs button,
+.team-tab,
+.team-view-tabs button,
+.kbo-pill,
+.team-favorite-button {
+  border-color: #343841;
+  background: #262930;
+  color: #c6c9d0;
+}
+
+.favorite-chip {
+  background: #1a1c21;
+  color: #f4f4f5;
+  box-shadow: none;
+}
+
+.top-pill.active,
+.schedule-tab.active,
+.detail-tabs button.active,
+.team-tab.active,
+.team-view-tabs button.active,
+.kbo-pill.active,
+.refresh-button {
+  background: #e8eaed;
+  color: #16171a;
+}
+
+.status-chip.final,
+.badge.final {
+  background: #30333a;
+  color: #f0f1f3;
+}
+
+.favorite-match-card,
+.team-game-card,
+.news-card {
+  border-color: #30333a;
+  background: #1b1d22;
+  color: #f4f4f5;
+}
+
+.favorite-match-card:not(.unavailable):hover {
+  border-color: #797e89;
+  background: #22252b;
+}
+
+.schedule-scope,
+.kbo-toolbar-section.team-select,
+.boxscore-table-wrap {
+  border-color: #373b44;
+  background: #202329;
+  color: #e7e8eb;
+}
+
+.empty-action,
+.standings-refresh-mini {
+  border-color: #424751;
+  background: #292c33;
+  color: #e4e5e8;
+}
+
+.empty-action:hover,
+.standings-refresh-mini:hover:not(:disabled) {
+  background: #383c45;
+  color: #fff;
+}
+
+.match-row.selected {
+  border-color: #aeb3bc;
+  box-shadow: 0 0 0 1px rgba(224, 226, 230, 0.24);
+}
+
+.favorite-toggle {
+  color: #696e78;
+}
+
+.favorite-toggle.active,
+.favorite-mark,
+.team-favorite-button.active {
+  color: #ffd56a;
+}
+
+.team-favorite-button:hover {
+  border-color: #d5b55c;
+  color: #ffe29a;
+}
+
+.team-favorite-button.active {
+  border-color: #876d2f;
+  background: #302919;
+}
+
+.team-search input {
+  border-color: #373b44;
+  background: #191b20;
+  color: #f4f4f5;
+}
+
+.team-search input::placeholder {
+  color: #747984;
+}
+
+.team-search input:focus {
+  border-color: #9ca1ab;
+  box-shadow: 0 0 0 3px rgba(220, 222, 226, 0.12);
+}
+
+.news-category,
+.league-badge {
+  background: #2a2d34;
+  color: #d0d3da;
+}
+
+.kbo-record-table-wrap {
+  scrollbar-color: #555a64 #202228;
+}
+
+.kbo-record-table-wrap::-webkit-scrollbar-track {
+  background: #202228;
+}
+
+.kbo-record-table-wrap::-webkit-scrollbar-thumb {
+  background: #555a64;
+}
+
+.kbo-record-table th,
+.kbo-record-table td {
+  border-bottom-color: #30333a;
+  color: #d9dbe0;
+}
+
+.kbo-record-table th {
+  color: #9fa4ae;
+}
+
+.kbo-record-table th:first-child,
+.kbo-record-table td:first-child {
+  background: #1b1d22;
+  color: #f4f4f5;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.3);
+}
+
+.kbo-record-table tfoot td {
+  color: #f4f4f5;
+  background: #24272d;
+}
+
+.standing-team-name {
+  color: #f1f2f4;
+}
+
+.standing-rank-cell {
+  color: #b4b8c0;
+}
+
+.standing-row-active {
+  background: #30343b !important;
+  box-shadow: inset 3px 0 0 #e5e7eb;
+}
+
+.standing-row-active td {
+  color: #fff !important;
+}
+
+.standing-row-favorite {
+  background: #2d281c;
+}
