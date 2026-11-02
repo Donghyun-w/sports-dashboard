@@ -114,7 +114,6 @@ function App() {
     standings: null,
     message: null,
   });
-  const [standingsLeagueTab, setStandingsLeagueTab] = useState<League>('NBA');
 
   useEffect(() => {
     void fetchScoreboard();
@@ -176,6 +175,13 @@ function App() {
   const leagueMatches = useMemo(() => {
     return apiState.matches.filter((match) => leagueFilter === 'ALL' || match.league === leagueFilter);
   }, [apiState.matches, leagueFilter]);
+  const leagueUpcomingMatches = useMemo(() => {
+    if (leagueFilter === 'ALL') return [];
+
+    return apiState.matches
+      .filter((match) => match.league === leagueFilter && matchesScheduleBucket(match, 'UPCOMING', kboReferenceDate))
+      .sort(sortByDateAsc);
+  }, [apiState.matches, kboReferenceDate, leagueFilter]);
 
   const teamProfiles = useMemo(() => {
     return getLeagueTeams(leagueFilter).sort((left, right) => {
@@ -247,26 +253,20 @@ function App() {
   }));
   const selectedTeam = (getTeamByKey(selectedTeamKey) ?? teamProfiles[0] ?? null) as TeamCatalogEntry | null;
   const scopedScheduleTeam = (scheduleTeamKey ? getTeamByKey(scheduleTeamKey) : null) as TeamCatalogEntry | null;
-  const favoriteMatches = useMemo(() => {
-    return apiState.matches
-      .filter((match) => isFavoriteMatch(match, favoriteTeams))
-      .sort(sortMatchesForFocus)
-      .slice(0, 6);
-  }, [apiState.matches, favoriteTeams]);
-  const leagueInsights = useMemo(() => {
-    return (leagueFilters.filter((filter): filter is League => filter !== 'ALL')).map((league) => {
-      const matches = apiState.matches.filter((match) => match.league === league);
-      const teams = getLeagueTeams(league);
-      return {
-        league,
-        matches: matches.length,
-        live: matches.filter((match) => match.status === 'LIVE').length,
-        final: matches.filter((match) => match.status === 'FINAL').length,
-        upcoming: matches.filter((match) => match.status === 'UPCOMING').length,
-        favorites: teams.filter((team) => isFavoriteTeam(favoriteTeams, team.league, team.abbr)).length,
-      };
+  const favoriteRecentMatches = useMemo(() => {
+    return favoriteProfiles.map((team) => {
+      const match = apiState.matches
+        .filter(
+          (item) =>
+            item.league === team.league &&
+            (item.homeAbbr === team.abbr || item.awayAbbr === team.abbr) &&
+            item.status !== 'UPCOMING',
+        )
+        .sort(sortFavoriteRecentMatches)[0];
+
+      return { team, match: match ?? null };
     });
-  }, [apiState.matches, favoriteTeams]);
+  }, [apiState.matches, favoriteProfiles]);
   const activeCategory = useMemo(() => {
     const categories = boxScoreState.boxScore?.categories;
     if (!categories || categories.length === 0) return null;
@@ -294,25 +294,30 @@ function App() {
     );
 
     const referenceDate = selectedTeam.league === 'KBO' ? kboReferenceDate : new Date().toISOString();
+    const windowDays = selectedTeam.league === 'NFL' ? 14 : 5;
 
-    const recent = related
+    const recentInRange = related
       .filter((match) => {
         const diff = getDayDiff(match.startDate, referenceDate);
-        return diff >= -5 && diff <= 0;
+        return diff >= -windowDays && diff <= 0;
       })
-      .sort(sortByDateDesc)
-      .slice(0, 5);
+      .sort(sortByDateDesc);
+    const mostRecentPastMatch = related
+      .filter((match) => getDayDiff(match.startDate, referenceDate) < -windowDays)
+      .sort(sortByDateDesc)[0];
+    const recent = (recentInRange.length > 0 ? recentInRange : mostRecentPastMatch ? [mostRecentPastMatch] : []).slice(0, 5);
 
     const upcoming = related
       .filter((match) => {
         const diff = getDayDiff(match.startDate, referenceDate);
-        return diff >= 1 && diff <= 5;
+        return diff >= 1 && diff <= windowDays;
       })
       .sort(sortByDateAsc)
       .slice(0, 5);
 
     return { recent, upcoming };
   }, [kboReferenceDate, leagueMatches, selectedTeam]);
+  const teamScheduleWindowLabel = selectedTeam?.league === 'NFL' ? '2 Weeks' : '5 Days';
 
   useEffect(() => {
     if (!selectedTeam) {
@@ -459,19 +464,6 @@ function App() {
     selectedMatch?.startDate,
   ]);
 
-  const summary = useMemo(() => {
-    const liveCount = filteredMatches.filter((match) => match.status === 'LIVE').length;
-    const finalCount = filteredMatches.filter((match) => match.status === 'FINAL').length;
-    const upcomingCount = filteredMatches.filter((match) => match.status === 'UPCOMING').length;
-
-    return [
-      { label: 'Live Games', value: String(liveCount) },
-      { label: 'Final Games', value: String(finalCount) },
-      { label: 'Upcoming', value: String(upcomingCount) },
-      { label: 'Favorites', value: String(favoriteTeams.length) },
-    ];
-  }, [favoriteTeams.length, filteredMatches]);
-
   async function fetchScoreboard(isBackground = false) {
     if (!isBackground) {
       setLoading(true);
@@ -605,76 +597,28 @@ function App() {
         </section>
       ) : null}
 
-      <section className="summary-grid">
-        {summary.map((item) => (
-          <article key={item.label} className="summary-card">
-            <span>{item.label}</span>
-            <strong>{item.value}</strong>
-          </article>
-        ))}
-      </section>
-
-      <section className="league-focus">
-        <div className="panel-header">
-          <div>
-            <p className="section-label">League Focus</p>
-            <h2>{leagueFilter === 'ALL' ? 'All League Rooms' : `${leagueFilter} Room`}</h2>
-          </div>
-          <span className="match-count">NBA · NFL · KBO</span>
-        </div>
-        <div className="league-focus-grid">
-          {leagueInsights.map((insight) => (
-            <button
-              key={insight.league}
-              className={`league-focus-card ${leagueFilter === insight.league ? 'active' : ''}`}
-              onClick={() => {
-                setLeagueFilter(insight.league);
-                setScheduleTeamKey(null);
-              }}
-            >
-              <span>{insight.league}</span>
-              <strong>{insight.matches} games</strong>
-              <small>
-                Live {insight.live} · Final {insight.final} · Upcoming {insight.upcoming}
-              </small>
-              <em>{insight.favorites} favorite teams</em>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {favoriteMatches.length > 0 ? (
+      {favoriteRecentMatches.length > 0 ? (
         <section className="favorite-focus">
           <div className="panel-header">
             <div>
               <p className="section-label">Favorite Watch</p>
-              <h2>My Teams Today</h2>
+              <h2>Favorite Team Updates</h2>
             </div>
-            <button
-              className={`inline-filter ${favoritesOnly ? 'active' : ''}`}
-              onClick={() => setFavoritesOnly((current) => !current)}
-            >
-              {favoritesOnly ? 'Showing Favorites' : 'Show Favorites Only'}
-            </button>
+            <span className="match-count">팀별 최근 1경기</span>
           </div>
-          <div className="favorite-match-grid">
-            {favoriteMatches.map((match) => (
-              <button
-                key={match.id}
-                className="favorite-match-card"
-                onClick={() => {
-                  setLeagueFilter(match.league);
-                  setDateFilter(resolveMatchBucket(match));
+          <div className="favorite-match-grid favorite-team-grid">
+            {favoriteRecentMatches.map(({ team, match }) => (
+              <FavoriteRecentCard
+                key={team.key}
+                team={team}
+                match={match}
+                onSelectMatch={(selected) => {
+                  setLeagueFilter(selected.league);
+                  setDateFilter(resolveMatchBucket(selected));
                   setScheduleTeamKey(null);
-                  setSelectedMatchId(match.id);
+                  setSelectedMatchId(selected.id);
                 }}
-              >
-                <span className={`badge ${match.status.toLowerCase()}`}>{renderCenterStatus(match)}</span>
-                <strong>
-                  {match.awayTeam} {match.awayScore} : {match.homeScore} {match.homeTeam}
-                </strong>
-                <small>{match.startTime}</small>
-              </button>
+              />
             ))}
           </div>
         </section>
@@ -808,7 +752,23 @@ function App() {
               </article>
             ))}
 
-            {filteredMatches.length === 0 ? <div className="empty-card">선택한 조건에 맞는 경기가 없습니다.</div> : null}
+            {filteredMatches.length === 0 ? (
+              <div className="empty-card schedule-empty">
+                <p>선택한 조건에 맞는 경기가 없습니다.</p>
+                {leagueFilter !== 'ALL' && dateFilter !== 'UPCOMING' && leagueUpcomingMatches.length > 0 ? (
+                  <button
+                    className="empty-action"
+                    onClick={() => {
+                      setDateFilter('UPCOMING');
+                      setFavoritesOnly(false);
+                      setScheduleTeamKey(null);
+                    }}
+                  >
+                    {leagueFilter} 예정 경기 보기 · {leagueUpcomingMatches.length} games
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </aside>
 
@@ -891,8 +851,6 @@ function App() {
               {detailTab === 'standings' ? (
                 <StandingsView
                   standingsState={standingsState}
-                  selectedLeague={standingsLeagueTab}
-                  onSelectLeague={setStandingsLeagueTab}
                   selectedMatch={selectedMatch}
                   favoriteTeams={favoriteTeams}
                   onRefresh={() => void fetchStandings()}
@@ -923,7 +881,7 @@ function App() {
                         </section>
                       ) : null}
 
-                      <section className="detail-card">
+                      <section className="detail-card boxscore-controls-card">
                         <div className="kbo-toolbar">
                           {boxScoreState.boxScore.categories.length > 1 ? (
                             <div className="kbo-toolbar-section">
@@ -1007,10 +965,10 @@ function App() {
           <>
             <div className="team-view-tabs">
               <button className={teamViewTab === 'recent' ? 'active' : ''} onClick={() => setTeamViewTab('recent')}>
-                Prev 5 Days
+                Prev {teamScheduleWindowLabel}
               </button>
               <button className={teamViewTab === 'upcoming' ? 'active' : ''} onClick={() => setTeamViewTab('upcoming')}>
-                Next 5 Days
+                Next {teamScheduleWindowLabel}
               </button>
               <button className={teamViewTab === 'news' ? 'active' : ''} onClick={() => setTeamViewTab('news')}>
                 Team News
@@ -1162,15 +1120,74 @@ function TeamGameCard({ match, selectedTeamAbbr }: { match: Match; selectedTeamA
   );
 }
 
+function FavoriteRecentCard({
+  team,
+  match,
+  onSelectMatch,
+}: {
+  team: TeamCatalogEntry;
+  match: Match | null;
+  onSelectMatch: (match: Match) => void;
+}) {
+  if (!match) {
+    return (
+      <article className="favorite-match-card unavailable">
+        <div className="favorite-team-heading">
+          <div className="favorite-team-name">
+            <TeamEmblem team={team.name} abbr={team.abbr} league={team.league} size="sm" />
+            <div>
+              <span className="league-badge">{team.league}</span>
+              <strong>{team.name}</strong>
+            </div>
+          </div>
+        </div>
+        <p>최근 경기 데이터가 없습니다.</p>
+      </article>
+    );
+  }
+
+  const teamIsHome = match.homeAbbr === team.abbr;
+  const opponent = teamIsHome ? match.awayTeam : match.homeTeam;
+  const opponentAbbr = teamIsHome ? match.awayAbbr : match.homeAbbr;
+  const teamScore = teamIsHome ? match.homeScore : match.awayScore;
+  const opponentScore = teamIsHome ? match.awayScore : match.homeScore;
+
+  return (
+    <button className="favorite-match-card" onClick={() => onSelectMatch(match)}>
+      <div className="favorite-team-heading">
+        <div className="favorite-team-name">
+          <TeamEmblem team={team.name} abbr={team.abbr} league={team.league} size="sm" />
+          <div>
+            <span className="league-badge">{team.league}</span>
+            <strong>{team.name}</strong>
+          </div>
+        </div>
+        <span className={`badge ${match.status.toLowerCase()}`}>{renderCenterStatus(match)}</span>
+      </div>
+      <div className="favorite-recent-score">
+        <strong>{teamScore}</strong>
+        <span>:</span>
+        <strong>{opponentScore}</strong>
+      </div>
+      <div className="favorite-opponent">
+        <span>{teamIsHome ? 'Home' : 'Away'} · vs {opponent}</span>
+        <TeamEmblem team={opponent} abbr={opponentAbbr} league={match.league} size="sm" />
+      </div>
+      <small>{match.startTime}</small>
+    </button>
+  );
+}
+
 function BoxScoreRecordTable({ title, table }: { title: string; table: BoxScoreTable }) {
   const headers = table.headers;
   const compact = headers.includes('평균자책점') || headers.length > 8;
 
   return (
-    <section className="detail-card">
+    <section className="detail-card boxscore-record-card">
       <h4>{title}</h4>
-      <div className="kbo-record-table-wrap">
-        <table className={`kbo-record-table ${compact ? 'compact' : ''}`}>
+      <p className="table-scroll-hint">표를 좌우로 스크롤해 전체 기록을 확인하세요.</p>
+      <div className="kbo-record-table-wrap boxscore-table-wrap">
+        <table className={`kbo-record-table boxscore-table ${compact ? 'compact' : ''}`}>
           <thead>
             <tr>
               {headers.map((header, index) => (
@@ -1381,19 +1398,10 @@ function resolveFavoriteTeam(favorite: string) {
   return getTeamByAbbr(favorite, resolveLeagueFromAbbr(favorite)) ?? getTeamByAbbr(favorite);
 }
 
-function sortMatchesForFocus(left: Match, right: Match) {
-  const statusRank: Record<Match['status'], number> = {
-    LIVE: 0,
-    UPCOMING: 1,
-    FINAL: 2,
-  };
-
-  const statusDiff = statusRank[left.status] - statusRank[right.status];
-  if (statusDiff !== 0) {
-    return statusDiff;
-  }
-
-  return sortByDateAsc(left, right);
+function sortFavoriteRecentMatches(left: Match, right: Match) {
+  if (left.status === 'LIVE' && right.status !== 'LIVE') return -1;
+  if (right.status === 'LIVE' && left.status !== 'LIVE') return 1;
+  return sortByDateDesc(left, right);
 }
 
 function formatNewsDate(pubDate: string) {
@@ -1421,8 +1429,6 @@ function sortByDateAsc(left: Match, right: Match) {
 
 function StandingsView({
   standingsState,
-  selectedLeague,
-  onSelectLeague,
   selectedMatch,
   favoriteTeams,
   onRefresh,
@@ -1432,18 +1438,16 @@ function StandingsView({
     standings: AllStandings | null;
     message: string | null;
   };
-  selectedLeague: League;
-  onSelectLeague: (league: League) => void;
   selectedMatch: Match;
   favoriteTeams: string[];
   onRefresh: () => void;
 }) {
+  const selectedLeague = selectedMatch.league;
   const currentData = standingsState.standings?.[selectedLeague];
 
   return (
     <div className="standings-stack">
-      {/* 1. Quick Matchup Snapshot */}
-      <section className="detail-card">
+      <section className="detail-card standings-matchup-card">
         <div className="standings-snapshot-header">
           <h4>Matchup Snapshot · {selectedMatch.league}</h4>
           <button className="standings-refresh-mini" onClick={onRefresh} disabled={standingsState.loading}>
@@ -1466,27 +1470,6 @@ function StandingsView({
         </div>
       </section>
 
-      {/* 2. League Selector */}
-      <section className="detail-card">
-        <div className="kbo-toolbar">
-          <div className="kbo-toolbar-section">
-            <span className="kbo-toolbar-label">리그 순위표 선택</span>
-            <div className="kbo-toolbar-group">
-              {(['NBA', 'NFL', 'KBO'] as League[]).map((league) => (
-                <button
-                  key={league}
-                  className={`kbo-pill ${selectedLeague === league ? 'active' : ''}`}
-                  onClick={() => onSelectLeague(league)}
-                >
-                  {league === 'NBA' ? '🏀 NBA' : league === 'NFL' ? '🏈 NFL' : '⚾ KBO'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Standings Tables */}
       {standingsState.loading && !currentData ? (
         <div className="empty-card">{selectedLeague} 순위표를 불러오는 중입니다...</div>
       ) : null}
@@ -1501,7 +1484,7 @@ function StandingsView({
             <h4>{group.groupName}</h4>
             <span className="standings-title-badge">{selectedLeague}</span>
           </div>
-          <div className="kbo-record-table-wrap">
+          <div className="kbo-record-table-wrap standings-table-wrap">
             <table className="kbo-record-table standings-table compact">
               <thead>
                 <tr>

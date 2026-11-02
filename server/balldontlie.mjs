@@ -38,40 +38,41 @@ async function fetchJson(path, params, apiKey) {
   return response.json();
 }
 
-export async function fetchEspnNbaScoreboard() {
+async function fetchEspnScoreboardEvents(scoreboardUrl, offsets = [0]) {
   try {
-    const response = await fetch(ESPN_NBA_SCOREBOARD_URL, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-      },
+    const requests = offsets.map(async (offset) => {
+      const url = new URL(scoreboardUrl);
+      const dateKey = toLocalDateString(addDays(new Date(), offset)).replaceAll('-', '');
+      url.searchParams.set('dates', dateKey);
+
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        },
+      });
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      return data.events ?? [];
     });
-    if (!response.ok) {
-      return [];
-    }
-    const data = await response.json();
-    return data.events ?? [];
+
+    const events = (await Promise.all(requests)).flat();
+    return Array.from(new Map(events.map((event) => [event.id, event])).values());
   } catch (error) {
-    console.error('ESPN NBA fetch error:', error?.message || error);
+    console.error('ESPN scoreboard fetch error:', error?.message || error);
     return [];
   }
 }
 
+export async function fetchEspnNbaScoreboard() {
+  return fetchEspnScoreboardEvents(ESPN_NBA_SCOREBOARD_URL, [0, 1]);
+}
+
 export async function fetchEspnNflScoreboard() {
-  try {
-    const response = await fetch(ESPN_NFL_SCOREBOARD_URL, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-      },
-    });
-    if (!response.ok) {
-      return [];
-    }
-    const data = await response.json();
-    return data.events ?? [];
-  } catch (error) {
-    console.error('ESPN NFL fetch error:', error?.message || error);
-    return [];
-  }
+  return fetchEspnScoreboardEvents(ESPN_NFL_SCOREBOARD_URL);
 }
 
 function toLocalDateString(date) {
@@ -95,6 +96,21 @@ function getNflSeasonYear(today) {
   return month >= 8 ? year : year - 1;
 }
 
+function getNflWeek(today, season) {
+  const kickoffWindowStart = new Date(Date.UTC(season, 8, 7));
+  const daysUntilThursday = (4 - kickoffWindowStart.getUTCDay() + 7) % 7;
+  const seasonKickoff = addDays(kickoffWindowStart, daysUntilThursday);
+  const elapsedWeeks = Math.floor((today.getTime() - seasonKickoff.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  return Math.min(18, Math.max(1, elapsedWeeks + 1));
+}
+
+function getNflWeekWindow(today, season) {
+  const currentWeek = getNflWeek(today, season);
+  const firstWeek = Math.max(1, currentWeek - 2);
+  const lastWeek = Math.min(18, currentWeek + 2);
+  return Array.from({ length: lastWeek - firstWeek + 1 }, (_, index) => firstWeek + index);
+}
+
 export async function fetchNbaGames(apiKey, today = new Date()) {
   if (!apiKey) {
     return { data: [] };
@@ -110,5 +126,5 @@ export async function fetchNflGames(apiKey, today = new Date()) {
     return { data: [] };
   }
   const season = getNflSeasonYear(today);
-  return fetchJson('/nfl/v1/games', { seasons: [season, season + 1], weeks: [1, 2, 3, 4, 5, 6], per_page: 100 }, apiKey);
+  return fetchJson('/nfl/v1/games', { seasons: [season], weeks: getNflWeekWindow(today, season), per_page: 100 }, apiKey);
 }
