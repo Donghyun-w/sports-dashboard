@@ -162,6 +162,7 @@ export function transformEspnEvents(events, league) {
         status,
         dateBucket: resolveDateBucket(startDate),
         startDate,
+        externalGameId: String(event.id ?? ''),
         homeAbbr,
         awayAbbr,
         homeRecord,

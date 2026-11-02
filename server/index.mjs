@@ -3,6 +3,7 @@ import { fetchEspnNbaScoreboard, fetchEspnNflScoreboard, fetchNbaGames, fetchNfl
 import { fetchKboBoxScore, fetchKboScoreboard } from './kbo.mjs';
 import { fetchTeamNews } from './news.mjs';
 import { fetchUnifiedBoxScore } from './boxscore.mjs';
+import { fetchUnifiedStandings } from './standings.mjs';
 import { transformEspnEvents, transformNbaGames, transformNflGames } from './transformers.mjs';
 
 const API_KEY = process.env.BALLDONTLIE_API_KEY;
@@ -12,6 +13,9 @@ function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
   });
   response.end(JSON.stringify(payload));
 }
@@ -142,6 +146,22 @@ async function handleTeamNews(requestUrl, response) {
   }
 }
 
+async function handleStandings(requestUrl, response) {
+  const league = requestUrl.searchParams.get('league') || 'ALL';
+  try {
+    const standings = await fetchUnifiedStandings(league);
+    sendJson(response, 200, {
+      standings,
+      message: '순위표 데이터를 성공적으로 불러왔습니다.',
+    });
+  } catch (error) {
+    sendJson(response, 502, {
+      standings: null,
+      message: error instanceof Error ? error.message : '순위표 데이터를 불러오는 중 오류가 발생했습니다.',
+    });
+  }
+}
+
 async function handleUnifiedBoxScore(requestUrl, response) {
   const league = requestUrl.searchParams.get('league') ?? 'KBO';
   const gameId = requestUrl.searchParams.get('gameId') ?? '';
@@ -150,6 +170,8 @@ async function handleUnifiedBoxScore(requestUrl, response) {
   const gameDate = requestUrl.searchParams.get('gameDate') ?? '';
   const homeTeam = requestUrl.searchParams.get('homeTeam') ?? '';
   const awayTeam = requestUrl.searchParams.get('awayTeam') ?? '';
+  const homeAbbr = requestUrl.searchParams.get('homeAbbr') ?? '';
+  const awayAbbr = requestUrl.searchParams.get('awayAbbr') ?? '';
 
   try {
     const boxScore = await fetchUnifiedBoxScore({
@@ -160,6 +182,8 @@ async function handleUnifiedBoxScore(requestUrl, response) {
       gameDate,
       homeTeam,
       awayTeam,
+      homeAbbr,
+      awayAbbr,
     });
 
     sendJson(response, 200, {
@@ -233,6 +257,11 @@ const server = createServer(async (request, response) => {
 
   if (request.method === 'GET' && (requestUrl.pathname === '/api/boxscore' || requestUrl.pathname === '/api/unified-boxscore')) {
     await handleUnifiedBoxScore(requestUrl, response);
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/standings') {
+    await handleStandings(requestUrl, response);
     return;
   }
 

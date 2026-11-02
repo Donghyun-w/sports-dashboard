@@ -1,4 +1,4 @@
-import type { KboBoxScore, LeagueBoxScore, Match } from './types';
+import type { AllStandings, KboBoxScore, LeagueBoxScore, Match } from './types';
 
 export type ScoreboardResponse = {
   matches: Match[];
@@ -14,5 +14,10 @@ export type BoxScoreResponse = {
 
 export type KboBoxScoreResponse = {
   boxScore: KboBoxScore | null;
+  message: string | null;
+};
+
+export type StandingsResponse = {
+  standings: AllStandings | null;
   message: string | null;
 };

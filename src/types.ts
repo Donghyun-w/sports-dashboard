@@ -69,3 +69,37 @@ export type KboBoxScore = {
   awayPitchers: KboBoxScoreTable;
   homePitchers: KboBoxScoreTable;
 };
+
+export type StandingRow = {
+  rank: string;
+  team: string;
+  abbr: string;
+  games?: string;
+  wins: string;
+  losses: string;
+  ties?: string;
+  winPct: string;
+  gb: string;
+  diff?: string;
+  streak: string;
+  l10?: string;
+};
+
+export type StandingGroup = {
+  groupName: string;
+  headers: string[];
+  rows: StandingRow[];
+};
+
+export type LeagueStandingsData = {
+  league: League;
+  title: string;
+  lastUpdated: string;
+  groups: StandingGroup[];
+};
+
+export type AllStandings = {
+  NBA?: LeagueStandingsData | null;
+  NFL?: LeagueStandingsData | null;
+  KBO?: LeagueStandingsData | null;
+};

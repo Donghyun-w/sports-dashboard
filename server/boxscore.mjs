@@ -62,33 +62,34 @@ const NBA_MOCK_PROFILES = {
   ],
 };
 
+function mockProfileFor(teamName) {
+  const raw = String(teamName || '').trim();
+  if (!raw) return null;
+  if (NBA_MOCK_PROFILES[raw]) return NBA_MOCK_PROFILES[raw];
+  const hit = Object.entries(NBA_MOCK_PROFILES).find(([key]) => raw.toLowerCase().includes(key.toLowerCase()));
+  return hit?.[1] ?? null;
+}
+
 function generateFallbackNbaBoxScore(awayTeam, homeTeam) {
-  const defaultAway = NBA_MOCK_PROFILES[awayTeam] || NBA_MOCK_PROFILES.Celtics;
-  const defaultHome = NBA_MOCK_PROFILES[homeTeam] || NBA_MOCK_PROFILES.Lakers;
-
-  const headers = ['선수', 'MIN', 'PTS', 'FG', '3PT', 'FT', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-'];
-
   return {
     league: 'NBA',
     notes: [
-      { label: '경기 구분', value: '정규 시즌' },
-      { label: '주요 기록', value: `${awayTeam} vs ${homeTeam} 박스스코어` },
+      { label: '박스스코어 상태', value: 'ESPN 실시간 선수 기록을 아직 확인할 수 없습니다.' },
+      { label: '경기', value: `${awayTeam} vs ${homeTeam}` },
     ],
     categories: [
       {
-        key: 'all',
-        name: '종합 기록',
+        key: 'unavailable',
+        name: '선수 기록 준비 중',
         awayTable: {
           title: `${awayTeam} 선수 기록`,
-          headers,
-          rows: defaultAway,
-          footer: ['Team Totals', '240', '108', '40-88', '14-36', '14-17', '43', '26', '7', '4', '12', '18', '-'],
+          headers: ['안내'],
+          rows: [['실제 선수 기록을 불러오는 중입니다.']],
         },
         homeTable: {
           title: `${homeTeam} 선수 기록`,
-          headers,
-          rows: defaultHome,
-          footer: ['Team Totals', '240', '115', '43-85', '13-31', '16-20', '46', '28', '8', '6', '11', '16', '-'],
+          headers: ['안내'],
+          rows: [['실제 선수 기록을 불러오는 중입니다.']],
         },
       },
     ],
@@ -213,64 +214,165 @@ function generateFallbackNflBoxScore(awayTeam, homeTeam) {
   };
 }
 
-export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '') {
-  const cleanId = String(gameId).replace(/^1/, '');
-  try {
-    const url = `${ESPN_NBA_SUMMARY_URL}?event=${cleanId}`;
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-      },
-    });
+function ymdInTimeZone(date, timeZone) {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone }).format(date).replace(/-/g, '');
+}
 
-    if (!response.ok) {
-      return generateFallbackNbaBoxScore(awayTeam || 'Away', homeTeam || 'Home');
-    }
+function nearbyScoreboardDates(gameDate = '') {
+  const dates = new Set();
+  const cleanDate = String(gameDate || '').replace(/-/g, '');
+  if (/^\d{8}$/.test(cleanDate)) {
+    dates.add(cleanDate);
+    const utc = new Date(`${cleanDate.slice(0, 4)}-${cleanDate.slice(4, 6)}-${cleanDate.slice(6, 8)}T12:00:00Z`);
+    const prev = new Date(utc);
+    prev.setUTCDate(prev.getUTCDate() - 1);
+    const next = new Date(utc);
+    next.setUTCDate(next.getUTCDate() + 1);
+    dates.add(ymdInTimeZone(prev, 'UTC'));
+    dates.add(ymdInTimeZone(next, 'UTC'));
+  }
+  const now = new Date();
+  dates.add(ymdInTimeZone(now, 'America/New_York'));
+  const nyYesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  dates.add(ymdInTimeZone(nyYesterday, 'America/New_York'));
+  return [...dates];
+}
 
-    const data = await response.json();
-    const boxPlayers = data.boxscore?.players ?? [];
+function teamTokens(name, abbr) {
+  return [name, abbr]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+}
 
-    if (boxPlayers.length < 2) {
-      return generateFallbackNbaBoxScore(awayTeam || 'Away', homeTeam || 'Home');
-    }
+function teamMatches(team, name, abbr) {
+  if (!team) return false;
+  const needles = teamTokens(name, abbr);
+  if (needles.length === 0) return false;
+  const haystack = [team.displayName, team.name, team.shortDisplayName, team.abbreviation, team.nickname]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+  return needles.some((needle) => haystack.some((value) => value.includes(needle) || needle.includes(value)));
+}
 
-    const awayData = boxPlayers[0];
-    const homeData = boxPlayers[1];
-    const headers = ['선수', 'MIN', 'PTS', 'FG', '3PT', 'FT', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-'];
+function findBoxScoreTeam(boxPlayers, competitor, teamName, teamAbbr) {
+  const expectedTeamId = competitor?.team?.id;
 
-    const buildRows = (teamData) => {
-      const statsBlock = teamData.statistics?.[0];
-      if (!statsBlock?.athletes) return [];
+  if (expectedTeamId) {
+    const idMatch = boxPlayers.find((entry) => String(entry.team?.id) === String(expectedTeamId));
+    if (idMatch) return idMatch;
+  }
 
-      return statsBlock.athletes.map((ath) => {
-        const name = ath.athlete?.displayName || ath.athlete?.shortName || 'Player';
-        const rawStats = ath.stats ?? [];
-        const min = rawStats[0] ?? '-';
-        const pts = rawStats[1] ?? '-';
-        const fg = rawStats[2] ?? '-';
-        const threePt = rawStats[3] ?? '-';
-        const ft = rawStats[4] ?? '-';
-        const reb = rawStats[5] ?? '-';
-        const ast = rawStats[6] ?? '-';
-        const to = rawStats[7] ?? '-';
-        const stl = rawStats[8] ?? '-';
-        const blk = rawStats[9] ?? '-';
-        const pf = rawStats[12] ?? '-';
-        const plusMinus = rawStats[13] ?? '-';
+  return boxPlayers.find((entry) => teamMatches(entry.team, teamName, teamAbbr)) ?? null;
+}
 
-        return [name, min, pts, fg, threePt, ft, reb, ast, stl, blk, to, pf, plusMinus];
+async function lookupEspnNbaEventId(homeTeam, awayTeam, gameDate = '', homeAbbr = '', awayAbbr = '') {
+  const urls = [
+    'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
+    ...nearbyScoreboardDates(gameDate).map((date) => `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}`),
+  ];
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' },
       });
-    };
+      if (!res.ok) continue;
+      const data = await res.json();
+      const events = data.events ?? [];
 
-    const awayRows = buildRows(awayData);
-    const homeRows = buildRows(homeData);
+      for (const ev of events) {
+        const comp = ev.competitions?.[0];
+        const h = comp?.competitors?.find((c) => c.homeAway === 'home')?.team;
+        const a = comp?.competitors?.find((c) => c.homeAway === 'away')?.team;
+        if (teamMatches(h, homeTeam, homeAbbr) && teamMatches(a, awayTeam, awayAbbr)) {
+          return ev.id;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
 
-    if (awayRows.length === 0 && homeRows.length === 0) {
+function resolveNbaEventId(gameId) {
+  const raw = String(gameId ?? '').trim();
+  if (!raw) return '';
+  if (/^401\d+$/.test(raw)) return raw;
+  const prefixed = raw.match(/^1(401\d+)$/);
+  if (prefixed) return prefixed[1];
+  return raw.replace(/^1/, '');
+}
+
+function espnHeaders() {
+  return { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' };
+}
+
+async function fetchEspnNbaSummary(eventId) {
+  if (!eventId) return { ok: false, data: null };
+  const response = await fetch(`${ESPN_NBA_SUMMARY_URL}?event=${eventId}`, { headers: espnHeaders() });
+  if (!response.ok) return { ok: false, data: null };
+  return { ok: true, data: await response.json() };
+}
+
+function hasNbaPlayerRows(data) {
+  const players = data?.boxscore?.players ?? [];
+  return players.some((team) => (team.statistics ?? []).some((block) => (block.athletes ?? []).length > 0));
+}
+
+function pickStat(keys, labels, stats, keyNames, labelNames, fallbackIndex) {
+  const keyList = Array.isArray(keys) ? keys : [];
+  const labelList = Array.isArray(labels) ? labels : [];
+  for (const key of keyNames) {
+    const index = keyList.indexOf(key);
+    if (index >= 0 && stats[index] !== undefined && stats[index] !== '') return String(stats[index]);
+  }
+  for (const label of labelNames) {
+    const index = labelList.findIndex((item) => String(item).toUpperCase() === label);
+    if (index >= 0 && stats[index] !== undefined && stats[index] !== '') return String(stats[index]);
+  }
+  if (fallbackIndex >= 0 && stats[fallbackIndex] !== undefined && stats[fallbackIndex] !== '') {
+    return String(stats[fallbackIndex]);
+  }
+  return '-';
+}
+
+function playerDisplayName(ath) {
+  const athlete = ath?.athlete ?? {};
+  return athlete.displayName || athlete.shortName || athlete.fullName || 'Player';
+}
+
+function nbaPlayerStatsBlock(teamData) {
+  const blocks = teamData?.statistics ?? [];
+  return blocks.find((block) => (block.athletes ?? []).length > 0) ?? blocks[0];
+}
+
+export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '', gameDate = '', homeAbbr = '', awayAbbr = '') {
+  let cleanId = resolveNbaEventId(gameId);
+  try {
+    let { ok, data } = await fetchEspnNbaSummary(cleanId);
+
+    if ((!ok || !hasNbaPlayerRows(data)) && (homeTeam || awayTeam || homeAbbr || awayAbbr)) {
+      const lookedUpId = await lookupEspnNbaEventId(homeTeam, awayTeam, gameDate, homeAbbr, awayAbbr);
+      if (lookedUpId && String(lookedUpId) !== String(cleanId)) {
+        const lookedUp = await fetchEspnNbaSummary(lookedUpId);
+        if (lookedUp.ok) {
+          cleanId = lookedUpId;
+          ok = lookedUp.ok;
+          data = lookedUp.data;
+        }
+      }
+    }
+
+    if (!ok || !data) {
       return generateFallbackNbaBoxScore(awayTeam || 'Away', homeTeam || 'Home');
     }
 
-    const awayTeamName = awayData.team?.displayName || awayTeam || 'Away';
-    const homeTeamName = homeData.team?.displayName || homeTeam || 'Home';
+    const boxPlayers = data.boxscore?.players ?? [];
+    const statusState = data.header?.competitions?.[0]?.status?.type?.state;
+    const isPreGame = statusState === 'pre';
+
+    const headers = ['선수', 'MIN', 'PTS', 'FG', '3PT', 'FT', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-'];
 
     const notes = [];
     if (data.gameInfo?.venue?.fullName) {
@@ -279,26 +381,193 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '')
     if (data.gameInfo?.attendance) {
       notes.push({ label: '관중 수', value: `${data.gameInfo.attendance.toLocaleString()}명` });
     }
+    if (data.header?.competitions?.[0]?.status?.type?.detail) {
+      notes.push({ label: '경기 상태', value: data.header.competitions[0].status.type.detail });
+    }
+
+    // Match home and away teams accurately from competitors
+    const competitors = data.header?.competitions?.[0]?.competitors ?? [];
+    const homeComp = competitors.find((c) => c.homeAway === 'home');
+    const awayComp = competitors.find((c) => c.homeAway === 'away');
+
+    const homeId = homeComp?.team?.id || homeComp?.id;
+    const awayId = awayComp?.team?.id || awayComp?.id;
+    const awayData = findBoxScoreTeam(boxPlayers, awayComp, awayTeam, awayAbbr);
+    const homeData = findBoxScoreTeam(boxPlayers, homeComp, homeTeam, homeAbbr);
+
+    const awayTeamName = awayComp?.team?.displayName || awayData?.team?.displayName || awayTeam || 'Away';
+    const homeTeamName = homeComp?.team?.displayName || homeData?.team?.displayName || homeTeam || 'Home';
+
+    // 1. If match is finished or live with active player statistics
+    if (!isPreGame && nbaPlayerStatsBlock(awayData)?.athletes?.length > 0 && nbaPlayerStatsBlock(homeData)?.athletes?.length > 0) {
+      const buildRows = (teamData) => {
+        const statsBlock = nbaPlayerStatsBlock(teamData);
+        if (!statsBlock?.athletes) return [];
+
+        const athleteRows = statsBlock.athletes.map((ath) => {
+          const name = playerDisplayName(ath);
+          const rawStats = ath.stats ?? [];
+          const min = rawStats[0] ?? '-';
+          const pts = rawStats[1] ?? '-';
+          const fg = rawStats[2] ?? '-';
+          const threePt = rawStats[3] ?? '-';
+          const ft = rawStats[4] ?? '-';
+          const reb = rawStats[5] ?? '-';
+          const ast = rawStats[6] ?? '-';
+          const to = rawStats[7] ?? '-';
+          const stl = rawStats[8] ?? '-';
+          const blk = rawStats[9] ?? '-';
+          const pf = rawStats[12] ?? '-';
+          const plusMinus = rawStats[13] ?? '-';
+
+          return [name, min, pts, fg, threePt, ft, reb, ast, stl, blk, to, pf, plusMinus];
+        });
+
+        athleteRows.sort((a, b) => {
+          const minA = parseInt(a[1], 10) || 0;
+          const minB = parseInt(b[1], 10) || 0;
+          return minB - minA;
+        });
+
+        return athleteRows;
+      };
+
+      const buildFooter = (teamData) => {
+        const statsBlock = nbaPlayerStatsBlock(teamData);
+        const rawTotals = statsBlock?.totals ?? [];
+        if (!rawTotals || rawTotals.length === 0) return undefined;
+
+        const min = rawTotals[0] || '240';
+        const pts = rawTotals[1] || '-';
+        const fg = rawTotals[2] || '-';
+        const threePt = rawTotals[3] || '-';
+        const ft = rawTotals[4] || '-';
+        const reb = rawTotals[5] || '-';
+        const ast = rawTotals[6] || '-';
+        const to = rawTotals[7] || '-';
+        const stl = rawTotals[8] || '-';
+        const blk = rawTotals[9] || '-';
+        const pf = rawTotals[12] || '-';
+        const plusMinus = rawTotals[13] || '-';
+
+        return ['팀 합계 (Totals)', min, pts, fg, threePt, ft, reb, ast, stl, blk, to, pf, plusMinus];
+      };
+
+      const awayRows = buildRows(awayData);
+      const homeRows = buildRows(homeData);
+      const awayFooter = buildFooter(awayData);
+      const homeFooter = buildFooter(homeData);
+
+      return {
+        league: 'NBA',
+        notes,
+        categories: [
+          {
+            key: 'all',
+            name: '종합 기록',
+            awayTable: {
+              title: `${awayTeamName} 선수 기록`,
+              headers,
+              rows: awayRows,
+              footer: awayFooter,
+            },
+            homeTable: {
+              title: `${homeTeamName} 선수 기록`,
+              headers,
+              rows: homeRows,
+              footer: homeFooter,
+            },
+          },
+        ],
+      };
+    }
+
+    // 2. Pre-game: provide rich matchup intelligence (Leaders + Team Season Stats)
+    const leaders = data.leaders ?? [];
+    const teamStats = data.boxscore?.teams ?? [];
+
+    const getTeamLeaders = (isHome) => {
+      const targetId = isHome ? homeId : awayId;
+      const targetName = isHome ? homeTeamName : awayTeamName;
+      const found = leaders.find((l) => (targetId ? String(l.team?.id) === String(targetId) : l.team?.displayName?.includes(targetName)));
+      const lList = found?.leaders ?? [];
+
+      const rows = [];
+      lList.forEach((cat) => {
+        const leader = cat.leaders?.[0];
+        if (leader) {
+          const athleteName = leader.athlete?.displayName || 'Player';
+          const pos = leader.athlete?.position?.abbreviation || '-';
+          const catName = cat.displayName === 'Points' ? '득점 (PTS)' : cat.displayName === 'Assists' ? '어시스트 (AST)' : cat.displayName === 'Rebounds' ? '리바운드 (REB)' : cat.displayName;
+          const statVal = `${leader.displayValue} ${leader.mainStat?.label || ''}`;
+          const summary = leader.summary || '-';
+          rows.push([catName, athleteName, pos, statVal, summary]);
+        }
+      });
+
+      return rows;
+    };
+
+    const getTeamStatsRows = (isHome) => {
+      const targetId = isHome ? homeId : awayId;
+      const targetName = isHome ? homeTeamName : awayTeamName;
+      const found = teamStats.find((t) => (targetId ? String(t.team?.id) === String(targetId) : t.team?.displayName?.includes(targetName)));
+      const stats = found?.statistics ?? [];
+
+      return stats.map((s) => [s.label || s.name, s.displayValue || '-', s.description || s.name]);
+    };
+
+    const awayLeaderRows = getTeamLeaders(false);
+    const homeLeaderRows = getTeamLeaders(true);
+    const awayTeamStatRows = getTeamStatsRows(false);
+    const homeTeamStatRows = getTeamStatsRows(true);
+
+    const categories = [];
+
+    if (awayLeaderRows.length > 0 || homeLeaderRows.length > 0) {
+      categories.push({
+        key: 'leaders',
+        name: '주요 선수 리더 (Season Leaders)',
+        awayTable: {
+          title: `${awayTeamName} 주요 선수`,
+          headers: ['부문', '선수명', '포지션', '시즌 기록', '세부 지표'],
+          rows: awayLeaderRows.length > 0 ? awayLeaderRows : [['기록 집계 중', '-', '-', '-', '-']],
+        },
+        homeTable: {
+          title: `${homeTeamName} 주요 선수`,
+          headers: ['부문', '선수명', '포지션', '시즌 기록', '세부 지표'],
+          rows: homeLeaderRows.length > 0 ? homeLeaderRows : [['기록 집계 중', '-', '-', '-', '-']],
+        },
+      });
+    }
+
+    if (awayTeamStatRows.length > 0 || homeTeamStatRows.length > 0) {
+      categories.push({
+        key: 'team-stats',
+        name: '팀 시즌 지표 (Team Stats)',
+        awayTable: {
+          title: `${awayTeamName} 팀 스탯`,
+          headers: ['지표', '기록 수치', '설명'],
+          rows: awayTeamStatRows,
+        },
+        homeTable: {
+          title: `${homeTeamName} 팀 스탯`,
+          headers: ['지표', '기록 수치', '설명'],
+          rows: homeTeamStatRows,
+        },
+      });
+    }
+
+    if (categories.length === 0) {
+      return generateFallbackNbaBoxScore(awayTeam || 'Away', homeTeam || 'Home');
+    }
+
+    notes.unshift({ label: '안내', value: '경기 시작 전 프리뷰 지표입니다. 경기 시작 후 실시간 박스스코어로 자동 전환됩니다.' });
 
     return {
       league: 'NBA',
       notes,
-      categories: [
-        {
-          key: 'all',
-          name: '종합 기록',
-          awayTable: {
-            title: `${awayTeamName} 선수 기록`,
-            headers,
-            rows: awayRows,
-          },
-          homeTable: {
-            title: `${homeTeamName} 선수 기록`,
-            headers,
-            rows: homeRows,
-          },
-        },
-      ],
+      categories,
     };
   } catch (error) {
     console.error('NBA boxscore fetch failed:', error?.message || error);
@@ -428,12 +697,14 @@ export async function fetchUnifiedBoxScore({
   gameDate = '',
   homeTeam = '',
   awayTeam = '',
+  homeAbbr = '',
+  awayAbbr = '',
 }) {
   if (!league) {
     throw new Error('league 파라미터가 필요합니다.');
   }
 
-  const cacheKey = `${league}:${gameId}:${seasonId}:${seriesId}:${gameDate}`;
+  const cacheKey = `${league}:${gameId}:${seasonId}:${seriesId}:${gameDate}:${homeAbbr}:${awayAbbr}`;
   const cached = boxScoreCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.payload;
@@ -470,7 +741,7 @@ export async function fetchUnifiedBoxScore({
       };
     }
   } else if (league === 'NBA') {
-    result = await fetchEspnNbaBoxScore(gameId, homeTeam, awayTeam);
+    result = await fetchEspnNbaBoxScore(gameId, homeTeam, awayTeam, gameDate, homeAbbr, awayAbbr);
   } else if (league === 'NFL') {
     result = await fetchEspnNflBoxScore(gameId, homeTeam, awayTeam);
   }

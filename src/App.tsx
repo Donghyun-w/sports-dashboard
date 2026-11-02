@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { BoxScoreResponse } from './api';
+import type { BoxScoreResponse, StandingsResponse } from './api';
 import { initialMatches } from './data';
 import { getLeagueTeams, getTeamByAbbr, getTeamByKey, resolveLeagueFromAbbr, type TeamCatalogEntry } from './teamCatalog';
 import { getTeamBrand, TeamEmblem } from './teamBranding';
-import type { BoxScoreCategory, BoxScoreTable, League, Match, LeagueBoxScore, ScheduleBucket } from './types';
+import type { AllStandings, BoxScoreCategory, BoxScoreTable, League, Match, LeagueBoxScore, ScheduleBucket } from './types';
 
 type LeagueFilter = 'ALL' | League;
 type DetailTab = 'stats' | 'play' | 'standings' | 'records';
@@ -105,9 +105,20 @@ function App() {
   });
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string>('');
   const [boxScoreTeamSide, setBoxScoreTeamSide] = useState<'away' | 'home'>('away');
+  const [standingsState, setStandingsState] = useState<{
+    loading: boolean;
+    standings: AllStandings | null;
+    message: string | null;
+  }>({
+    loading: false,
+    standings: null,
+    message: null,
+  });
+  const [standingsLeagueTab, setStandingsLeagueTab] = useState<League>('NBA');
 
   useEffect(() => {
     void fetchScoreboard();
+    void fetchStandings();
     const timer = window.setInterval(() => {
       void fetchScoreboard(true);
     }, 30000);
@@ -390,6 +401,8 @@ function App() {
           gameId: selectedMatch.externalGameId ?? String(selectedMatch.id),
           homeTeam: selectedMatch.homeTeam,
           awayTeam: selectedMatch.awayTeam,
+          homeAbbr: selectedMatch.homeAbbr ?? '',
+          awayAbbr: selectedMatch.awayAbbr ?? '',
           seasonId: selectedMatch.seasonId ?? selectedMatch.startDate?.slice(0, 4) ?? '',
           seriesId: selectedMatch.seriesId ?? '0',
           gameDate: selectedMatch.startDate ? selectedMatch.startDate.slice(0, 10).replace(/-/g, '') : '',
@@ -495,6 +508,25 @@ function App() {
       if (!isBackground) {
         setLoading(false);
       }
+    }
+  }
+
+  async function fetchStandings() {
+    setStandingsState((curr) => ({ ...curr, loading: true }));
+    try {
+      const response = await fetchApi(`/api/standings?league=ALL&_t=${Date.now()}`);
+      const payload: StandingsResponse = await response.json();
+      setStandingsState({
+        loading: false,
+        standings: payload.standings,
+        message: payload.message,
+      });
+    } catch {
+      setStandingsState({
+        loading: false,
+        standings: null,
+        message: '순위표 데이터를 불러오지 못했습니다.',
+      });
     }
   }
 
@@ -857,19 +889,14 @@ function App() {
               ) : null}
 
               {detailTab === 'standings' ? (
-                <section className="detail-card">
-                  <h4>Record Snapshot</h4>
-                  <div className="notes-grid">
-                    <div>
-                      <span>{selectedMatch.awayTeam}</span>
-                      <strong>{selectedMatch.awayRecord ?? '데이터 준비 중'}</strong>
-                    </div>
-                    <div>
-                      <span>{selectedMatch.homeTeam}</span>
-                      <strong>{selectedMatch.homeRecord ?? '데이터 준비 중'}</strong>
-                    </div>
-                  </div>
-                </section>
+                <StandingsView
+                  standingsState={standingsState}
+                  selectedLeague={standingsLeagueTab}
+                  onSelectLeague={setStandingsLeagueTab}
+                  selectedMatch={selectedMatch}
+                  favoriteTeams={favoriteTeams}
+                  onRefresh={() => void fetchStandings()}
+                />
               ) : null}
 
               {detailTab === 'records' ? (
@@ -1390,6 +1417,155 @@ function sortByDateDesc(left: Match, right: Match) {
 
 function sortByDateAsc(left: Match, right: Match) {
   return (Date.parse(left.startDate ?? '') || 0) - (Date.parse(right.startDate ?? '') || 0);
+}
+
+function StandingsView({
+  standingsState,
+  selectedLeague,
+  onSelectLeague,
+  selectedMatch,
+  favoriteTeams,
+  onRefresh,
+}: {
+  standingsState: {
+    loading: boolean;
+    standings: AllStandings | null;
+    message: string | null;
+  };
+  selectedLeague: League;
+  onSelectLeague: (league: League) => void;
+  selectedMatch: Match;
+  favoriteTeams: string[];
+  onRefresh: () => void;
+}) {
+  const currentData = standingsState.standings?.[selectedLeague];
+
+  return (
+    <div className="standings-stack">
+      {/* 1. Quick Matchup Snapshot */}
+      <section className="detail-card">
+        <div className="standings-snapshot-header">
+          <h4>Matchup Snapshot · {selectedMatch.league}</h4>
+          <button className="standings-refresh-mini" onClick={onRefresh} disabled={standingsState.loading}>
+            {standingsState.loading ? '갱신 중...' : '순위 새로고침'}
+          </button>
+        </div>
+        <div className="notes-grid">
+          <div>
+            <span>
+              {selectedMatch.awayTeam} {selectedMatch.awayAbbr ? `(${selectedMatch.awayAbbr})` : ''}
+            </span>
+            <strong>{selectedMatch.awayRecord ?? '성적 정보 없음'}</strong>
+          </div>
+          <div>
+            <span>
+              {selectedMatch.homeTeam} {selectedMatch.homeAbbr ? `(${selectedMatch.homeAbbr})` : ''}
+            </span>
+            <strong>{selectedMatch.homeRecord ?? '성적 정보 없음'}</strong>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. League Selector */}
+      <section className="detail-card">
+        <div className="kbo-toolbar">
+          <div className="kbo-toolbar-section">
+            <span className="kbo-toolbar-label">리그 순위표 선택</span>
+            <div className="kbo-toolbar-group">
+              {(['NBA', 'NFL', 'KBO'] as League[]).map((league) => (
+                <button
+                  key={league}
+                  className={`kbo-pill ${selectedLeague === league ? 'active' : ''}`}
+                  onClick={() => onSelectLeague(league)}
+                >
+                  {league === 'NBA' ? '🏀 NBA' : league === 'NFL' ? '🏈 NFL' : '⚾ KBO'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Standings Tables */}
+      {standingsState.loading && !currentData ? (
+        <div className="empty-card">{selectedLeague} 순위표를 불러오는 중입니다...</div>
+      ) : null}
+
+      {!standingsState.loading && !currentData ? (
+        <div className="empty-card">{standingsState.message ?? '순위표 데이터를 불러올 수 없습니다.'}</div>
+      ) : null}
+
+      {currentData?.groups?.map((group) => (
+        <section key={group.groupName} className="detail-card">
+          <div className="standings-group-title">
+            <h4>{group.groupName}</h4>
+            <span className="standings-title-badge">{selectedLeague}</span>
+          </div>
+          <div className="kbo-record-table-wrap">
+            <table className="kbo-record-table standings-table compact">
+              <thead>
+                <tr>
+                  {group.headers.map((header, idx) => (
+                    <th key={`${group.groupName}-h-${idx}`}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {group.rows.map((row) => {
+                  const isMatchAway = selectedMatch.awayAbbr === row.abbr || selectedMatch.awayTeam.includes(row.team);
+                  const isMatchHome = selectedMatch.homeAbbr === row.abbr || selectedMatch.homeTeam.includes(row.team);
+                  const isSelectedGame = isMatchAway || isMatchHome;
+                  const isFav = isFavoriteTeam(favoriteTeams, selectedLeague, row.abbr);
+
+                  return (
+                    <tr
+                      key={`${group.groupName}-${row.team}`}
+                      className={`${isSelectedGame ? 'standing-row-active' : ''} ${isFav ? 'standing-row-favorite' : ''}`}
+                    >
+                      <td className="standing-rank-cell">
+                        <strong>{row.rank}</strong>
+                      </td>
+                      <td className="standing-team-cell">
+                        <div className="standing-team-item">
+                          <TeamEmblem team={row.team} abbr={row.abbr} league={selectedLeague} size="sm" />
+                          <div className="standing-team-name-wrap">
+                            <span className="standing-team-name">{row.team}</span>
+                            {isSelectedGame ? <span className="standing-tag-current">선택 경기</span> : null}
+                            {isFav ? <span className="standing-tag-fav">★</span> : null}
+                          </div>
+                        </div>
+                      </td>
+                      {row.games !== undefined ? <td>{row.games}</td> : null}
+                      <td>
+                        <strong>{row.wins}</strong>
+                      </td>
+                      <td>{row.losses}</td>
+                      {row.ties !== undefined ? <td>{row.ties}</td> : null}
+                      <td>
+                        <strong>{row.winPct}</strong>
+                      </td>
+                      <td>{row.gb}</td>
+                      {row.diff !== undefined ? <td>{row.diff}</td> : null}
+                      {row.l10 !== undefined ? <td>{row.l10}</td> : null}
+                      <td>
+                        <span
+                          className={`standing-streak-chip ${
+                            row.streak.startsWith('W') || row.streak.includes('승') ? 'win' : 'lose'
+                          }`}
+                        >
+                          {row.streak}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+    </div>
+  );
 }
 
 export default App;

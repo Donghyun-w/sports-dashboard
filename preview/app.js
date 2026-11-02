@@ -292,7 +292,7 @@ async function fetchTeamNews(team) {
   render();
 
   try {
-    const response = await fetch(`${apiBase}/api/team-news?team=${encodeURIComponent(team.name)}&league=${encodeURIComponent(team.league)}&query=${encodeURIComponent(team.newsQuery)}`);
+    const response = await fetch(`${apiBase}/api/team-news?team=${encodeURIComponent(team.name)}&league=${encodeURIComponent(team.league)}&query=${encodeURIComponent(team.newsQuery)}&_t=${Date.now()}`, { cache: 'no-store' });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || '팀 뉴스를 불러오지 못했습니다.');
     state.teamNews = { teamKey: team.key, loading: false, message: payload.message || null, articles: payload.articles || [] };

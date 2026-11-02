@@ -27,6 +27,8 @@ export default async function handler(req, res) {
     gameDate = '',
     homeTeam = '',
     awayTeam = '',
+    homeAbbr = '',
+    awayAbbr = '',
   } = req.query || {};
 
   const { statusCode, payload } = await buildBoxScorePayload({
@@ -37,6 +39,8 @@ export default async function handler(req, res) {
     gameDate,
     homeTeam,
     awayTeam,
+    homeAbbr,
+    awayAbbr,
   });
 
   send(res, statusCode, payload);

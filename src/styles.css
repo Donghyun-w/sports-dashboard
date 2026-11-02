@@ -952,6 +952,7 @@ button {
   display: grid;
   gap: 18px;
   margin-top: 18px;
+  min-width: 0;
 }
 
 .kbo-toolbar {
@@ -1048,6 +1049,7 @@ button {
 
 .kbo-record-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
   -webkit-overflow-scrolling: touch;
   border-radius: 14px;
   margin-top: 4px;
@@ -1070,9 +1072,10 @@ button {
 }
 
 .kbo-record-table {
-  width: 100%;
-  border-collapse: collapse;
+  width: max-content;
   min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .kbo-record-table th,
@@ -1104,6 +1107,8 @@ button {
   font-weight: 600;
   color: #f8fbff;
   padding-left: 14px;
+  padding-right: 16px;
+  min-width: 168px;
   position: sticky;
   left: 0;
   background: #0b1528;
@@ -1189,4 +1194,132 @@ button {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+/* Standings Tab Styles */
+.standings-stack {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.standings-snapshot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.standings-refresh-mini {
+  background: rgba(126, 167, 255, 0.12);
+  border: 1px solid rgba(126, 167, 255, 0.25);
+  color: #7ea7ff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.standings-refresh-mini:hover:not(:disabled) {
+  background: rgba(126, 167, 255, 0.25);
+  color: #fff;
+}
+
+.standings-group-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.standings-title-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cfd8ea;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.standings-table {
+  width: 100%;
+}
+
+.standing-rank-cell {
+  width: 44px;
+  text-align: center;
+  color: #a4b3cf;
+}
+
+.standing-team-cell {
+  text-align: left !important;
+  min-width: 180px;
+}
+
+.standing-team-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.standing-team-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.standing-team-name {
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.standing-tag-current {
+  background: rgba(79, 121, 255, 0.25);
+  border: 1px solid #4f79ff;
+  color: #9cbaff;
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.standing-tag-fav {
+  color: #f6c343;
+  font-size: 0.82rem;
+}
+
+.standing-row-active {
+  background: rgba(79, 121, 255, 0.12) !important;
+  box-shadow: inset 3px 0 0 #4f79ff;
+}
+
+.standing-row-active td {
+  color: #fff !important;
+}
+
+.standing-row-favorite {
+  background: rgba(246, 195, 67, 0.06);
+}
+
+.standing-streak-chip {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.standing-streak-chip.win {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+}
+
+.standing-streak-chip.lose {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
 }
