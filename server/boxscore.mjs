@@ -214,6 +214,32 @@ function generateFallbackNflBoxScore(awayTeam, homeTeam) {
   };
 }
 
+function generateUnavailableNflBoxScore(awayTeam, homeTeam) {
+  return {
+    league: 'NFL',
+    notes: [
+      { label: '박스스코어 상태', value: '실제 NFL 선수 기록이 아직 제공되지 않았습니다.' },
+      { label: '경기', value: `${awayTeam} vs ${homeTeam}` },
+    ],
+    categories: [
+      {
+        key: 'unavailable',
+        name: '선수 기록 준비 중',
+        awayTable: {
+          title: `${awayTeam} 선수 기록`,
+          headers: ['안내'],
+          rows: [['실제 선수 기록을 불러오는 중입니다.']],
+        },
+        homeTable: {
+          title: `${homeTeam} 선수 기록`,
+          headers: ['안내'],
+          rows: [['실제 선수 기록을 불러오는 중입니다.']],
+        },
+      },
+    ],
+  };
+}
+
 function ymdInTimeZone(date, timeZone) {
   return new Intl.DateTimeFormat('sv-SE', { timeZone }).format(date).replace(/-/g, '');
 }
@@ -295,6 +321,34 @@ async function lookupEspnNbaEventId(homeTeam, awayTeam, gameDate = '', homeAbbr 
   return null;
 }
 
+async function lookupEspnNflEventId(homeTeam, awayTeam, gameDate = '', homeAbbr = '', awayAbbr = '') {
+  const urls = [
+    'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
+    ...nearbyScoreboardDates(gameDate).map((date) => `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${date}`),
+  ];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, { headers: espnHeaders() });
+      if (!response.ok) continue;
+      const data = await response.json();
+
+      for (const event of data.events ?? []) {
+        const competitors = event.competitions?.[0]?.competitors ?? [];
+        const home = competitors.find((competitor) => competitor.homeAway === 'home')?.team;
+        const away = competitors.find((competitor) => competitor.homeAway === 'away')?.team;
+        if (teamMatches(home, homeTeam, homeAbbr) && teamMatches(away, awayTeam, awayAbbr)) {
+          return event.id;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
 function resolveNbaEventId(gameId) {
   const raw = String(gameId ?? '').trim();
   if (!raw) return '';
@@ -302,6 +356,15 @@ function resolveNbaEventId(gameId) {
   const prefixed = raw.match(/^1(401\d+)$/);
   if (prefixed) return prefixed[1];
   return raw.replace(/^1/, '');
+}
+
+function resolveNflEventId(gameId) {
+  const raw = String(gameId ?? '').trim();
+  if (!raw) return '';
+  if (/^401\d+$/.test(raw)) return raw;
+  const prefixed = raw.match(/^2(401\d+)$/);
+  if (prefixed) return prefixed[1];
+  return '';
 }
 
 function espnHeaders() {
@@ -575,29 +638,39 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '',
   }
 }
 
-export async function fetchEspnNflBoxScore(gameId, homeTeam = '', awayTeam = '') {
-  const cleanId = String(gameId).replace(/^2/, '');
+export async function fetchEspnNflBoxScore(gameId, homeTeam = '', awayTeam = '', gameDate = '', homeAbbr = '', awayAbbr = '') {
+  let cleanId = resolveNflEventId(gameId);
   try {
-    const url = `${ESPN_NFL_SUMMARY_URL}?event=${cleanId}`;
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-      },
-    });
+    let response = cleanId ? await fetch(`${ESPN_NFL_SUMMARY_URL}?event=${cleanId}`, { headers: espnHeaders() }) : null;
 
-    if (!response.ok) {
-      return generateFallbackNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
+    if (!response?.ok) {
+      const lookedUpId = await lookupEspnNflEventId(homeTeam, awayTeam, gameDate, homeAbbr, awayAbbr);
+      if (lookedUpId) {
+        cleanId = String(lookedUpId);
+        response = await fetch(`${ESPN_NFL_SUMMARY_URL}?event=${cleanId}`, { headers: espnHeaders() });
+      }
+    }
+
+    if (!response?.ok) {
+      return generateUnavailableNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
     }
 
     const data = await response.json();
     const boxPlayers = data.boxscore?.players ?? [];
 
     if (boxPlayers.length < 2) {
-      return generateFallbackNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
+      return generateUnavailableNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
     }
 
-    const awayData = boxPlayers[0];
-    const homeData = boxPlayers[1];
+    const competitors = data.header?.competitions?.[0]?.competitors ?? [];
+    const awayComp = competitors.find((competitor) => competitor.homeAway === 'away');
+    const homeComp = competitors.find((competitor) => competitor.homeAway === 'home');
+    const awayData = findBoxScoreTeam(boxPlayers, awayComp, awayTeam, awayAbbr);
+    const homeData = findBoxScoreTeam(boxPlayers, homeComp, homeTeam, homeAbbr);
+
+    if (!awayData || !homeData) {
+      return generateUnavailableNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
+    }
     const awayTeamName = awayData.team?.displayName || awayTeam || 'Away';
     const homeTeamName = homeData.team?.displayName || homeTeam || 'Home';
 
@@ -667,7 +740,7 @@ export async function fetchEspnNflBoxScore(gameId, homeTeam = '', awayTeam = '')
 
     const hasAnyStats = categories.some((c) => c.awayTable.rows.length > 0 || c.homeTable.rows.length > 0);
     if (!hasAnyStats) {
-      return generateFallbackNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
+      return generateUnavailableNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
     }
 
     const notes = [];
@@ -685,7 +758,7 @@ export async function fetchEspnNflBoxScore(gameId, homeTeam = '', awayTeam = '')
     };
   } catch (error) {
     console.error('NFL boxscore fetch failed:', error?.message || error);
-    return generateFallbackNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
+    return generateUnavailableNflBoxScore(awayTeam || 'Away', homeTeam || 'Home');
   }
 }
 
@@ -743,7 +816,7 @@ export async function fetchUnifiedBoxScore({
   } else if (league === 'NBA') {
     result = await fetchEspnNbaBoxScore(gameId, homeTeam, awayTeam, gameDate, homeAbbr, awayAbbr);
   } else if (league === 'NFL') {
-    result = await fetchEspnNflBoxScore(gameId, homeTeam, awayTeam);
+    result = await fetchEspnNflBoxScore(gameId, homeTeam, awayTeam, gameDate, homeAbbr, awayAbbr);
   }
 
   if (result) {
