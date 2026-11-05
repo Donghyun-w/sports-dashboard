@@ -6,7 +6,6 @@ import type { AllStandings, BoxScoreCategory, BoxScoreTable, League, Match, Leag
 
 type LeagueFilter = 'ALL' | League;
 type DetailTab = 'stats' | 'play' | 'standings' | 'records';
-type TeamViewTab = 'recent' | 'upcoming' | 'news';
 
 type ApiState = {
   matches: Match[];
@@ -57,7 +56,6 @@ function App() {
   const [leagueFilter, setLeagueFilter] = useState<LeagueFilter>('ALL');
   const [dateFilter, setDateFilter] = useState<ScheduleBucket>('TODAY');
   const [detailTab, setDetailTab] = useState<DetailTab>('stats');
-  const [teamViewTab, setTeamViewTab] = useState<TeamViewTab>('recent');
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [apiState, setApiState] = useState<ApiState>({
     matches: [],
@@ -170,9 +168,6 @@ function App() {
       });
   }, [apiState.matches, dateFilter, favoriteTeams, favoritesOnly, kboReferenceDate, leagueFilter, scheduleTeamKey]);
 
-  const leagueMatches = useMemo(() => {
-    return apiState.matches.filter((match) => leagueFilter === 'ALL' || match.league === leagueFilter);
-  }, [apiState.matches, leagueFilter]);
   const leagueUpcomingMatches = useMemo(() => {
     if (leagueFilter === 'ALL') return [];
 
@@ -281,41 +276,6 @@ function App() {
     const teamName = boxScoreTeamSide === 'away' ? selectedMatch.awayTeam : selectedMatch.homeTeam;
     return `${teamName} · ${activeCategory.name}`;
   }, [activeCategory, boxScoreTeamSide, selectedMatch]);
-
-  const teamGames = useMemo(() => {
-    if (!selectedTeam) {
-      return { recent: [] as Match[], upcoming: [] as Match[] };
-    }
-
-    const related = leagueMatches.filter(
-      (match) => match.homeAbbr === selectedTeam.abbr || match.awayAbbr === selectedTeam.abbr,
-    );
-
-    const referenceDate = selectedTeam.league === 'KBO' ? kboReferenceDate : new Date().toISOString();
-    const windowDays = selectedTeam.league === 'NFL' ? 14 : 5;
-
-    const recentInRange = related
-      .filter((match) => {
-        const diff = getDayDiff(match.startDate, referenceDate);
-        return diff >= -windowDays && diff <= 0;
-      })
-      .sort(sortByDateDesc);
-    const mostRecentPastMatch = related
-      .filter((match) => getDayDiff(match.startDate, referenceDate) < -windowDays)
-      .sort(sortByDateDesc)[0];
-    const recent = (recentInRange.length > 0 ? recentInRange : mostRecentPastMatch ? [mostRecentPastMatch] : []).slice(0, 5);
-
-    const upcoming = related
-      .filter((match) => {
-        const diff = getDayDiff(match.startDate, referenceDate);
-        return diff >= 1 && diff <= windowDays;
-      })
-      .sort(sortByDateAsc)
-      .slice(0, 5);
-
-    return { recent, upcoming };
-  }, [kboReferenceDate, leagueMatches, selectedTeam]);
-  const teamScheduleWindowLabel = selectedTeam?.league === 'NFL' ? '2 Weeks' : '5 Days';
 
   useEffect(() => {
     if (!selectedTeam) {
@@ -673,11 +633,10 @@ function App() {
             {visibleTeamProfiles.map((team) => (
               <button
                 key={team.key}
-                className={`team-tab ${scheduleTeamKey === team.key ? 'active' : ''}`}
+                className={`team-tab ${selectedTeamKey === team.key ? 'active' : ''}`}
                 onClick={() => {
                   setSelectedTeamKey(team.key);
                   setScheduleTeamKey(team.key);
-                  setTeamViewTab('recent');
                 }}
               >
                 <TeamEmblem team={team.name} abbr={team.abbr} league={team.league} size="sm" />
@@ -951,95 +910,34 @@ function App() {
         </section>
       </section>
 
-      <section className="team-center">
-        <div className="panel-header">
-          <div>
-            <p className="section-label">Team Center</p>
-            <h2>{selectedTeam ? selectedTeam.name : 'Select Team'}</h2>
+      {selectedTeam ? (
+        <section className="team-news-center">
+          <div className="panel-header">
+            <div>
+              <p className="section-label">Team News</p>
+              <h2>{selectedTeam.name} News</h2>
+            </div>
+            <span className="league-badge">{selectedTeam.league}</span>
           </div>
-          {selectedTeam ? (
-            <div className="team-center-actions">
-              <span className="match-count">
-                {selectedTeam.league} · {teamGames.recent.length} recent / {teamGames.upcoming.length} upcoming
-              </span>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="team-tabs">
-          {visibleTeamProfiles.map((team) => (
-            <button
-              key={team.key}
-              className={`team-tab ${selectedTeamKey === team.key ? 'active' : ''}`}
-              onClick={() => {
-                setSelectedTeamKey(team.key);
-                setScheduleTeamKey(team.key);
-                setTeamViewTab('recent');
-              }}
-            >
-              <TeamEmblem team={team.name} abbr={team.abbr} league={team.league} size="sm" />
-              <span>{team.abbr}</span>
-            </button>
-          ))}
-        </div>
-
-        {selectedTeam ? (
-          <>
-            <div className="team-view-tabs">
-              <button className={teamViewTab === 'recent' ? 'active' : ''} onClick={() => setTeamViewTab('recent')}>
-                Prev {teamScheduleWindowLabel}
-              </button>
-              <button className={teamViewTab === 'upcoming' ? 'active' : ''} onClick={() => setTeamViewTab('upcoming')}>
-                Next {teamScheduleWindowLabel}
-              </button>
-              <button className={teamViewTab === 'news' ? 'active' : ''} onClick={() => setTeamViewTab('news')}>
-                Team News
-              </button>
-            </div>
-
-            {teamViewTab === 'recent' ? (
-              <section className="team-view-grid">
-                {teamGames.recent.length > 0 ? (
-                  teamGames.recent.map((match) => <TeamGameCard key={match.id} match={match} selectedTeamAbbr={selectedTeam.abbr} />)
-                ) : (
-                  <div className="empty-card">최근 경기 데이터가 없습니다.</div>
-                )}
-              </section>
+          <div className="news-list">
+            {teamNewsState.loading ? <div className="empty-card">뉴스를 불러오는 중입니다.</div> : null}
+            {!teamNewsState.loading && teamNewsState.articles.length === 0 ? (
+              <div className="empty-card">{teamNewsState.message ?? '표시할 뉴스가 없습니다.'}</div>
             ) : null}
+            {teamNewsState.articles.map((article) => (
+              <a key={`${article.link}-${article.pubDate}`} className="news-card" href={article.link} target="_blank" rel="noreferrer">
+                <div className="news-card-meta">
+                  <span className="news-category">{article.category ?? 'News'}</span>
+                  <span className="news-source">{article.source || selectedTeam.name}</span>
+                </div>
+                <h3>{article.title}</h3>
+                <p>{article.displayDate || formatNewsDate(article.pubDate)}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-            {teamViewTab === 'upcoming' ? (
-              <section className="team-view-grid">
-                {teamGames.upcoming.length > 0 ? (
-                  teamGames.upcoming.map((match) => <TeamGameCard key={match.id} match={match} selectedTeamAbbr={selectedTeam.abbr} />)
-                ) : (
-                  <div className="empty-card">예정된 경기 데이터가 없습니다.</div>
-                )}
-              </section>
-            ) : null}
-
-            {teamViewTab === 'news' ? (
-              <section className="news-list">
-                {teamNewsState.loading ? <div className="empty-card">뉴스를 불러오는 중입니다.</div> : null}
-                {!teamNewsState.loading && teamNewsState.articles.length === 0 ? (
-                  <div className="empty-card">{teamNewsState.message ?? '표시할 뉴스가 없습니다.'}</div>
-                ) : null}
-                {teamNewsState.articles.map((article) => (
-                  <a key={`${article.link}-${article.pubDate}`} className="news-card" href={article.link} target="_blank" rel="noreferrer">
-                    <div className="news-card-meta">
-                      <span className="news-category">{article.category ?? 'News'}</span>
-                      <span className="news-source">{article.source || selectedTeam.name}</span>
-                    </div>
-                    <h3>{article.title}</h3>
-                    <p>{article.displayDate || formatNewsDate(article.pubDate)}</p>
-                  </a>
-                ))}
-              </section>
-            ) : null}
-          </>
-        ) : (
-          <div className="empty-card">표시할 팀이 없습니다.</div>
-        )}
-      </section>
     </div>
   );
 }
@@ -1107,38 +1005,6 @@ function HeroTeam({
       <h3>{team}</h3>
       <span>{record ?? '—'}</span>
     </div>
-  );
-}
-
-function TeamGameCard({ match, selectedTeamAbbr }: { match: Match; selectedTeamAbbr: string }) {
-  const selectedIsHome = match.homeAbbr === selectedTeamAbbr;
-  const opponent = selectedIsHome ? match.awayTeam : match.homeTeam;
-  const opponentAbbr = selectedIsHome ? match.awayAbbr : match.homeAbbr;
-  const teamScore = selectedIsHome ? match.homeScore : match.awayScore;
-  const opponentScore = selectedIsHome ? match.awayScore : match.homeScore;
-
-  return (
-    <article className="team-game-card">
-      <div className="team-game-head">
-        <span className={`badge ${match.status.toLowerCase()}`}>{renderCenterStatus(match)}</span>
-        <span className="league-badge">{match.league}</span>
-      </div>
-      <div className="team-game-body">
-        <div className="team-game-score">
-          <strong>{teamScore}</strong>
-          <span>vs</span>
-          <strong>{opponentScore}</strong>
-        </div>
-        <div className="team-game-opponent">
-          <TeamEmblem team={opponent} abbr={opponentAbbr} league={match.league} size="sm" />
-          <div>
-            <h4>{opponent}</h4>
-            <p>{match.venue}</p>
-          </div>
-        </div>
-      </div>
-      <p className="team-game-time">{match.startTime}</p>
-    </article>
   );
 }
 

@@ -17,7 +17,7 @@ const TEAM_MAP = {
 
 const TEAM_KEYS = Object.keys(TEAM_MAP);
 const EXCLUDED_STATUS_PATTERN = /취소|서스펜디드/;
-const KBO_RANGE_OFFSETS = Array.from({ length: 11 }, (_, index) => index - 5);
+const KBO_RANGE_OFFSETS = Array.from({ length: 20 }, (_, index) => index - 14);
 const KBO_CACHE_TTL_MS = 60 * 1000;
 let kboCache = {
   expiresAt: 0,
