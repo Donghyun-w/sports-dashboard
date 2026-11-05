@@ -1,7 +1,7 @@
 function formatDateLabel(dateString) {
   const date = new Date(dateString);
 
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul',
     month: 'short',
     day: 'numeric',
@@ -44,7 +44,7 @@ function resolveDateBucket(dateString) {
 }
 
 function relativeUpdatedAt() {
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul',
     hour: '2-digit',
     minute: '2-digit',
@@ -74,7 +74,7 @@ function buildNbaPeriod(game) {
   }
 
   if (normalizedStatus === 'FINAL') {
-    return '경기 종료';
+    return 'Final';
   }
 
   return game.status;
@@ -84,7 +84,7 @@ function buildNflPeriod(game) {
   const normalizedStatus = normalizeStatus(game.status);
 
   if (normalizedStatus === 'FINAL') {
-    return '경기 종료';
+    return 'Final';
   }
 
   return game.status;
@@ -134,14 +134,14 @@ export function transformEspnEvents(events, league) {
       const awayAbbr = away?.team?.abbreviation || '';
       const homeRecord = home?.records?.[0]?.summary || '';
       const awayRecord = away?.records?.[0]?.summary || '';
-      const venue = comp?.venue?.fullName || `${homeTeam} 홈경기`;
+      const venue = comp?.venue?.fullName || `${homeTeam} home game`;
       const startDate = event.date || new Date().toISOString();
 
       const periodStr = isFinal
-        ? '경기 종료'
+        ? 'Final'
         : isLive
-          ? statusType?.detail || '진행 중'
-          : statusType?.shortDetail || '경기 예정';
+          ? statusType?.detail || 'Live'
+          : statusType?.shortDetail || 'Scheduled';
 
       const keyStats = [];
       if (home?.linescores && away?.linescores) {
@@ -176,8 +176,8 @@ export function transformEspnEvents(events, league) {
         venue,
         headline: `${awayTeam} vs ${homeTeam} · ${periodStr}`,
         summary: isFinal
-          ? `${venue}에서 ${awayTeam} ${awayScore} : ${homeScore} ${homeTeam}로 경기가 종료되었습니다.`
-          : `${venue}에서 경기가 ${isLive ? '실시간 진행 중' : '예정되어'} 있습니다.`,
+          ? `${awayTeam} ${awayScore} - ${homeScore} ${homeTeam} final at ${venue}.`
+          : `${awayTeam} vs ${homeTeam} is ${isLive ? 'live' : 'scheduled'} at ${venue}.`,
         keyStats,
         lastUpdated: relativeUpdatedAt(),
       };
@@ -203,20 +203,20 @@ export function transformNbaGames(payload) {
       awayScore: game.visitor_team_score ?? 0,
       period: buildNbaPeriod(game),
       startTime: formatDateLabel(game.datetime ?? game.date),
-      venue: `${game.home_team.city} 홈경기`,
+      venue: `${game.home_team.city} home game`,
       headline:
         normalizeStatus(game.status) === 'LIVE'
-          ? `${game.home_team.name} vs ${game.visitor_team.name} 실시간 진행 중`
+          ? `${game.home_team.name} vs ${game.visitor_team.name} live`
           : `${game.visitor_team.name} @ ${game.home_team.name}`,
       summary:
         normalizeStatus(game.status) === 'FINAL'
-          ? `${game.home_team.name} ${game.home_team_score} - ${game.visitor_team_score} ${game.visitor_team.name} 결과입니다.`
-          : `${game.status} 상태의 NBA 경기입니다.`,
+          ? `${game.home_team.name} ${game.home_team_score} - ${game.visitor_team_score} ${game.visitor_team.name} final.`
+          : `NBA game status: ${game.status}.`,
       keyStats: [
-        { label: '1쿼터', value: `${game.visitor_q1 ?? 0} - ${game.home_q1 ?? 0}` },
-        { label: '2쿼터', value: `${game.visitor_q2 ?? 0} - ${game.home_q2 ?? 0}` },
-        { label: '3쿼터', value: `${game.visitor_q3 ?? 0} - ${game.home_q3 ?? 0}` },
-        { label: '4쿼터', value: `${game.visitor_q4 ?? 0} - ${game.home_q4 ?? 0}` },
+        { label: 'Q1', value: `${game.visitor_q1 ?? 0} - ${game.home_q1 ?? 0}` },
+        { label: 'Q2', value: `${game.visitor_q2 ?? 0} - ${game.home_q2 ?? 0}` },
+        { label: 'Q3', value: `${game.visitor_q3 ?? 0} - ${game.home_q3 ?? 0}` },
+        { label: 'Q4', value: `${game.visitor_q4 ?? 0} - ${game.home_q4 ?? 0}` },
       ],
       lastUpdated: relativeUpdatedAt(),
     }))
@@ -241,14 +241,14 @@ export function transformNflGames(payload) {
       awayScore: game.visitor_team_score ?? 0,
       period: buildNflPeriod(game),
       startTime: formatDateLabel(game.date),
-      venue: game.venue ?? `${game.home_team.location} 홈경기`,
+      venue: game.venue ?? `${game.home_team.location} home game`,
       headline: `Week ${game.week} · ${game.home_team.name} vs ${game.visitor_team.name}`,
-      summary: game.summary || `${game.status} 상태의 NFL 경기입니다.`,
+      summary: game.summary || `NFL game status: ${game.status}.`,
       keyStats: [
-        { label: '1쿼터', value: `${game.visitor_team_q1 ?? 0} - ${game.home_team_q1 ?? 0}` },
-        { label: '2쿼터', value: `${game.visitor_team_q2 ?? 0} - ${game.home_team_q2 ?? 0}` },
-        { label: '3쿼터', value: `${game.visitor_team_q3 ?? 0} - ${game.home_team_q3 ?? 0}` },
-        { label: '4쿼터', value: `${game.visitor_team_q4 ?? 0} - ${game.home_team_q4 ?? 0}` },
+        { label: 'Q1', value: `${game.visitor_team_q1 ?? 0} - ${game.home_team_q1 ?? 0}` },
+        { label: 'Q2', value: `${game.visitor_team_q2 ?? 0} - ${game.home_team_q2 ?? 0}` },
+        { label: 'Q3', value: `${game.visitor_team_q3 ?? 0} - ${game.home_team_q3 ?? 0}` },
+        { label: 'Q4', value: `${game.visitor_team_q4 ?? 0} - ${game.home_team_q4 ?? 0}` },
       ],
       lastUpdated: relativeUpdatedAt(),
     }))

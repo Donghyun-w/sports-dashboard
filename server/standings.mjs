@@ -23,7 +23,7 @@ export async function fetchNbaStandings() {
     const data = await res.json();
 
     const groups = (data.children ?? []).map((conf) => {
-      const confName = conf.name === 'Eastern Conference' ? '동부 컨퍼런스 (Eastern)' : conf.name === 'Western Conference' ? '서부 컨퍼런스 (Western)' : conf.name;
+      const confName = conf.name;
       const entries = conf.standings?.entries ?? [];
 
       const rows = entries.map((entry) => {
@@ -59,14 +59,14 @@ export async function fetchNbaStandings() {
 
       return {
         groupName: confName,
-        headers: ['순위', '팀', '승', '패', '승률', '게임차', '득실차', '최근10', '연속'],
+        headers: ['Rank', 'Team', 'W', 'L', 'PCT', 'GB', 'DIFF', 'L10', 'STREAK'],
         rows,
       };
     });
 
     return {
       league: 'NBA',
-      title: 'NBA 정규 시즌 순위표',
+      title: 'NBA Regular Season Standings',
       lastUpdated: new Date().toISOString(),
       groups,
     };
@@ -88,7 +88,7 @@ export async function fetchNflStandings() {
     const data = await res.json();
 
     const groups = (data.children ?? []).map((conf) => {
-      const confName = conf.name === 'American Football Conference' ? 'AFC 컨퍼런스' : conf.name === 'National Football Conference' ? 'NFC 컨퍼런스' : conf.name;
+      const confName = conf.name;
       const entries = conf.standings?.entries ?? [];
 
       const rows = entries.map((entry) => {
@@ -123,14 +123,14 @@ export async function fetchNflStandings() {
 
       return {
         groupName: confName,
-        headers: ['순위', '팀', '승', '패', '무', '승률', '게임차', '득실차', '연속'],
+        headers: ['Rank', 'Team', 'W', 'L', 'T', 'PCT', 'GB', 'DIFF', 'STREAK'],
         rows,
       };
     });
 
     return {
       league: 'NFL',
-      title: 'NFL 컨퍼런스 순위표',
+      title: 'NFL Conference Standings',
       lastUpdated: new Date().toISOString(),
       groups,
     };
@@ -155,16 +155,16 @@ export async function fetchKboStandings() {
     if (!tableMatch) throw new Error('KBO Standings table not found');
 
     const kboNameMap = {
-      KT: { name: 'KT 위즈', abbr: 'KTW' },
-      삼성: { name: '삼성 라이온즈', abbr: 'SAM' },
-      KIA: { name: 'KIA 타이거즈', abbr: 'KIA' },
-      LG: { name: 'LG 트윈스', abbr: 'LGT' },
-      두산: { name: '두산 베어스', abbr: 'DSB' },
-      SSG: { name: 'SSG 랜더스', abbr: 'SSG' },
-      롯데: { name: '롯데 자이언츠', abbr: 'LOT' },
-      한화: { name: '한화 이글스', abbr: 'HAN' },
-      NC: { name: 'NC 다이노스', abbr: 'NCD' },
-      키움: { name: '키움 히어로즈', abbr: 'KIW' },
+      KT: { name: 'KT Wiz', abbr: 'KTW' },
+      삼성: { name: 'Samsung Lions', abbr: 'SAM' },
+      KIA: { name: 'KIA Tigers', abbr: 'KIA' },
+      LG: { name: 'LG Twins', abbr: 'LGT' },
+      두산: { name: 'Doosan Bears', abbr: 'DSB' },
+      SSG: { name: 'SSG Landers', abbr: 'SSG' },
+      롯데: { name: 'Lotte Giants', abbr: 'LOT' },
+      한화: { name: 'Hanwha Eagles', abbr: 'HAN' },
+      NC: { name: 'NC Dinos', abbr: 'NCD' },
+      키움: { name: 'Kiwoom Heroes', abbr: 'KIW' },
     };
 
     const rowMatches = [...tableMatch[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
@@ -197,12 +197,12 @@ export async function fetchKboStandings() {
 
     return {
       league: 'KBO',
-      title: 'KBO 정규리그 순위표',
+      title: 'KBO Regular Season Standings',
       lastUpdated: new Date().toISOString(),
       groups: [
         {
-          groupName: 'KBO 정규리그 순위',
-          headers: ['순위', '팀', '경기', '승', '패', '무', '승률', '게임차', '최근10', '연속'],
+          groupName: 'KBO Regular Season',
+          headers: ['Rank', 'Team', 'GP', 'W', 'L', 'T', 'PCT', 'GB', 'L10', 'STREAK'],
           rows,
         },
       ],

@@ -8,7 +8,7 @@ import { transformEspnEvents, transformNbaGames, transformNflGames } from './tra
 const cachedMatchesByLeague = new Map();
 
 function buildLastUpdated() {
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul',
     year: 'numeric',
     month: '2-digit',
@@ -100,11 +100,11 @@ export async function buildScoreboardPayload(apiKey = process.env.BALLDONTLIE_AP
     const messageParts = [];
 
     if (hasNbaMatches && hasNflMatches && hasKboMatches) {
-      messageParts.push('NBA · NFL · KBO 전 리그 실시간 데이터 수신 중');
+      messageParts.push('Live data is available for NBA, NFL, and KBO');
     } else {
-      if (hasNbaMatches) messageParts.push('NBA 실시간 라이브 연동');
-      if (hasNflMatches) messageParts.push('NFL 실시간 라이브 연동');
-      if (hasKboMatches) messageParts.push('KBO 공식 스코어보드 실시간 반영');
+      if (hasNbaMatches) messageParts.push('NBA live data connected');
+      if (hasNflMatches) messageParts.push('NFL live data connected');
+      if (hasKboMatches) messageParts.push('KBO official scoreboard connected');
     }
 
     return {
@@ -113,7 +113,7 @@ export async function buildScoreboardPayload(apiKey = process.env.BALLDONTLIE_AP
         matches,
         lastUpdated: buildLastUpdated(),
         source: matches.length > 0 ? 'live' : 'demo',
-        message: messageParts.join(' · ') || '표시할 실시간 데이터가 없습니다.',
+        message: messageParts.join(' · ') || 'No live data is available.',
       },
     };
   } catch (error) {
@@ -123,7 +123,7 @@ export async function buildScoreboardPayload(apiKey = process.env.BALLDONTLIE_AP
         matches: [],
         lastUpdated: null,
         source: 'demo',
-        message: error instanceof Error ? error.message : '실데이터 요청 중 오류가 발생했습니다.',
+        message: error instanceof Error ? error.message : 'An error occurred while requesting live data.',
       },
     };
   }
@@ -135,7 +135,7 @@ export async function buildTeamNewsPayload({ team, league = '', query = '' }) {
       statusCode: 400,
       payload: {
         articles: [],
-        message: 'team 파라미터가 필요합니다.',
+        message: 'The team parameter is required.',
       },
     };
   }
@@ -146,7 +146,7 @@ export async function buildTeamNewsPayload({ team, league = '', query = '' }) {
       statusCode: 200,
       payload: {
         articles,
-        message: articles.length > 0 ? '팀 뉴스 기사를 불러왔습니다.' : '표시할 뉴스가 없습니다.',
+        message: articles.length > 0 ? 'Team news loaded.' : 'No news is available.',
       },
     };
   } catch (error) {
@@ -154,7 +154,7 @@ export async function buildTeamNewsPayload({ team, league = '', query = '' }) {
       statusCode: 502,
       payload: {
         articles: [],
-        message: error instanceof Error ? error.message : '뉴스 요청 중 오류가 발생했습니다.',
+        message: error instanceof Error ? error.message : 'An error occurred while loading news.',
       },
     };
   }
@@ -188,7 +188,7 @@ export async function buildBoxScorePayload({
       statusCode: 200,
       payload: {
         boxScore,
-        message: boxScore ? `${league} 세부 기록을 불러왔습니다.` : `표시할 ${league} 세부 기록이 없습니다.`,
+        message: boxScore ? `${league} box score loaded.` : `No ${league} box score is available.`,
       },
     };
   } catch (error) {
@@ -196,7 +196,7 @@ export async function buildBoxScorePayload({
       statusCode: 502,
       payload: {
         boxScore: null,
-        message: error instanceof Error ? error.message : `${league} 세부 기록 요청 중 오류가 발생했습니다.`,
+        message: error instanceof Error ? error.message : `An error occurred while loading the ${league} box score.`,
       },
     };
   }
@@ -208,7 +208,7 @@ export async function buildKboBoxScorePayload({ gameId, seasonId = '', seriesId 
       statusCode: 400,
       payload: {
         boxScore: null,
-        message: 'gameId 파라미터가 필요합니다.',
+        message: 'The gameId parameter is required.',
       },
     };
   }
@@ -225,7 +225,7 @@ export async function buildKboBoxScorePayload({ gameId, seasonId = '', seriesId 
       statusCode: 200,
       payload: {
         boxScore,
-        message: boxScore ? 'KBO 박스스코어를 불러왔습니다.' : '표시할 KBO 박스스코어가 없습니다.',
+        message: boxScore ? 'KBO box score loaded.' : 'No KBO box score is available.',
       },
     };
   } catch (error) {
@@ -233,7 +233,7 @@ export async function buildKboBoxScorePayload({ gameId, seasonId = '', seriesId 
       statusCode: 502,
       payload: {
         boxScore: null,
-        message: error instanceof Error ? error.message : 'KBO 박스스코어 요청 중 오류가 발생했습니다.',
+        message: error instanceof Error ? error.message : 'An error occurred while loading the KBO box score.',
       },
     };
   }
@@ -246,7 +246,7 @@ export async function buildStandingsPayload({ league = 'ALL' } = {}) {
       statusCode: 200,
       payload: {
         standings,
-        message: '순위표 데이터를 성공적으로 불러왔습니다.',
+        message: 'Standings loaded.',
       },
     };
   } catch (error) {
@@ -254,7 +254,7 @@ export async function buildStandingsPayload({ league = 'ALL' } = {}) {
       statusCode: 502,
       payload: {
         standings: null,
-        message: error instanceof Error ? error.message : '순위표 데이터를 불러오는 중 오류가 발생했습니다.',
+        message: error instanceof Error ? error.message : 'An error occurred while loading standings.',
       },
     };
   }

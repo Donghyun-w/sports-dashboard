@@ -74,22 +74,22 @@ function generateFallbackNbaBoxScore(awayTeam, homeTeam) {
   return {
     league: 'NBA',
     notes: [
-      { label: '박스스코어 상태', value: 'ESPN 실시간 선수 기록을 아직 확인할 수 없습니다.' },
-      { label: '경기', value: `${awayTeam} vs ${homeTeam}` },
+      { label: 'Box Score Status', value: 'Live ESPN player statistics are not available yet.' },
+      { label: 'Matchup', value: `${awayTeam} vs ${homeTeam}` },
     ],
     categories: [
       {
         key: 'unavailable',
-        name: '선수 기록 준비 중',
+        name: 'Player Stats Pending',
         awayTable: {
-          title: `${awayTeam} 선수 기록`,
-          headers: ['안내'],
-          rows: [['실제 선수 기록을 불러오는 중입니다.']],
+          title: `${awayTeam} Player Stats`,
+          headers: ['Status'],
+          rows: [['Loading live player statistics.']],
         },
         homeTable: {
-          title: `${homeTeam} 선수 기록`,
-          headers: ['안내'],
-          rows: [['실제 선수 기록을 불러오는 중입니다.']],
+          title: `${homeTeam} Player Stats`,
+          headers: ['Status'],
+          rows: [['Loading live player statistics.']],
         },
       },
     ],
@@ -218,22 +218,22 @@ function generateUnavailableNflBoxScore(awayTeam, homeTeam) {
   return {
     league: 'NFL',
     notes: [
-      { label: '박스스코어 상태', value: '실제 NFL 선수 기록이 아직 제공되지 않았습니다.' },
-      { label: '경기', value: `${awayTeam} vs ${homeTeam}` },
+      { label: 'Box Score Status', value: 'Live NFL player statistics are not available yet.' },
+      { label: 'Matchup', value: `${awayTeam} vs ${homeTeam}` },
     ],
     categories: [
       {
         key: 'unavailable',
-        name: '선수 기록 준비 중',
+        name: 'Player Stats Pending',
         awayTable: {
-          title: `${awayTeam} 선수 기록`,
-          headers: ['안내'],
-          rows: [['실제 선수 기록을 불러오는 중입니다.']],
+          title: `${awayTeam} Player Stats`,
+          headers: ['Status'],
+          rows: [['Loading live player statistics.']],
         },
         homeTable: {
-          title: `${homeTeam} 선수 기록`,
-          headers: ['안내'],
-          rows: [['실제 선수 기록을 불러오는 중입니다.']],
+          title: `${homeTeam} Player Stats`,
+          headers: ['Status'],
+          rows: [['Loading live player statistics.']],
         },
       },
     ],
@@ -435,17 +435,17 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '',
     const statusState = data.header?.competitions?.[0]?.status?.type?.state;
     const isPreGame = statusState === 'pre';
 
-    const headers = ['선수', 'MIN', 'PTS', 'FG', '3PT', 'FT', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-'];
+    const headers = ['Player', 'MIN', 'PTS', 'FG', '3PT', 'FT', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', '+/-'];
 
     const notes = [];
     if (data.gameInfo?.venue?.fullName) {
-      notes.push({ label: '경기장', value: data.gameInfo.venue.fullName });
+      notes.push({ label: 'Venue', value: data.gameInfo.venue.fullName });
     }
     if (data.gameInfo?.attendance) {
-      notes.push({ label: '관중 수', value: `${data.gameInfo.attendance.toLocaleString()}명` });
+      notes.push({ label: 'Attendance', value: data.gameInfo.attendance.toLocaleString() });
     }
     if (data.header?.competitions?.[0]?.status?.type?.detail) {
-      notes.push({ label: '경기 상태', value: data.header.competitions[0].status.type.detail });
+      notes.push({ label: 'Game Status', value: data.header.competitions[0].status.type.detail });
     }
 
     // Match home and away teams accurately from competitors
@@ -513,7 +513,7 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '',
         const pf = rawTotals[12] || '-';
         const plusMinus = rawTotals[13] || '-';
 
-        return ['팀 합계 (Totals)', min, pts, fg, threePt, ft, reb, ast, stl, blk, to, pf, plusMinus];
+        return ['Team Totals', min, pts, fg, threePt, ft, reb, ast, stl, blk, to, pf, plusMinus];
       };
 
       const awayRows = buildRows(awayData);
@@ -527,15 +527,15 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '',
         categories: [
           {
             key: 'all',
-            name: '종합 기록',
+            name: 'Box Score',
             awayTable: {
-              title: `${awayTeamName} 선수 기록`,
+              title: `${awayTeamName} Player Stats`,
               headers,
               rows: awayRows,
               footer: awayFooter,
             },
             homeTable: {
-              title: `${homeTeamName} 선수 기록`,
+              title: `${homeTeamName} Player Stats`,
               headers,
               rows: homeRows,
               footer: homeFooter,
@@ -561,7 +561,7 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '',
         if (leader) {
           const athleteName = leader.athlete?.displayName || 'Player';
           const pos = leader.athlete?.position?.abbreviation || '-';
-          const catName = cat.displayName === 'Points' ? '득점 (PTS)' : cat.displayName === 'Assists' ? '어시스트 (AST)' : cat.displayName === 'Rebounds' ? '리바운드 (REB)' : cat.displayName;
+          const catName = cat.displayName === 'Points' ? 'Points (PTS)' : cat.displayName === 'Assists' ? 'Assists (AST)' : cat.displayName === 'Rebounds' ? 'Rebounds (REB)' : cat.displayName;
           const statVal = `${leader.displayValue} ${leader.mainStat?.label || ''}`;
           const summary = leader.summary || '-';
           rows.push([catName, athleteName, pos, statVal, summary]);
@@ -590,16 +590,16 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '',
     if (awayLeaderRows.length > 0 || homeLeaderRows.length > 0) {
       categories.push({
         key: 'leaders',
-        name: '주요 선수 리더 (Season Leaders)',
+        name: 'Season Leaders',
         awayTable: {
-          title: `${awayTeamName} 주요 선수`,
-          headers: ['부문', '선수명', '포지션', '시즌 기록', '세부 지표'],
-          rows: awayLeaderRows.length > 0 ? awayLeaderRows : [['기록 집계 중', '-', '-', '-', '-']],
+          title: `${awayTeamName} Leaders`,
+          headers: ['Category', 'Player', 'POS', 'Season Stat', 'Detail'],
+          rows: awayLeaderRows.length > 0 ? awayLeaderRows : [['Statistics pending', '-', '-', '-', '-']],
         },
         homeTable: {
-          title: `${homeTeamName} 주요 선수`,
-          headers: ['부문', '선수명', '포지션', '시즌 기록', '세부 지표'],
-          rows: homeLeaderRows.length > 0 ? homeLeaderRows : [['기록 집계 중', '-', '-', '-', '-']],
+          title: `${homeTeamName} Leaders`,
+          headers: ['Category', 'Player', 'POS', 'Season Stat', 'Detail'],
+          rows: homeLeaderRows.length > 0 ? homeLeaderRows : [['Statistics pending', '-', '-', '-', '-']],
         },
       });
     }
@@ -607,15 +607,15 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '',
     if (awayTeamStatRows.length > 0 || homeTeamStatRows.length > 0) {
       categories.push({
         key: 'team-stats',
-        name: '팀 시즌 지표 (Team Stats)',
+        name: 'Team Stats',
         awayTable: {
-          title: `${awayTeamName} 팀 스탯`,
-          headers: ['지표', '기록 수치', '설명'],
+          title: `${awayTeamName} Team Stats`,
+          headers: ['Metric', 'Value', 'Description'],
           rows: awayTeamStatRows,
         },
         homeTable: {
-          title: `${homeTeamName} 팀 스탯`,
-          headers: ['지표', '기록 수치', '설명'],
+          title: `${homeTeamName} Team Stats`,
+          headers: ['Metric', 'Value', 'Description'],
           rows: homeTeamStatRows,
         },
       });
@@ -625,7 +625,7 @@ export async function fetchEspnNbaBoxScore(gameId, homeTeam = '', awayTeam = '',
       return generateFallbackNbaBoxScore(awayTeam || 'Away', homeTeam || 'Home');
     }
 
-    notes.unshift({ label: '안내', value: '경기 시작 전 프리뷰 지표입니다. 경기 시작 후 실시간 박스스코어로 자동 전환됩니다.' });
+    notes.unshift({ label: 'Note', value: 'Pre-game preview statistics will switch to live box score data after tip-off.' });
 
     return {
       league: 'NBA',
@@ -677,33 +677,33 @@ export async function fetchEspnNflBoxScore(gameId, homeTeam = '', awayTeam = '',
     const categoryConfigs = [
       {
         key: 'passing',
-        name: 'Passing (패싱)',
+        name: 'Passing',
         espnName: 'passing',
-        headers: ['선수', 'C/ATT', 'YDS', 'AVG', 'TD', 'INT', 'SACKS', 'RTG'],
+        headers: ['Player', 'C/ATT', 'YDS', 'AVG', 'TD', 'INT', 'SACKS', 'RTG'],
       },
       {
         key: 'rushing',
-        name: 'Rushing (러싱)',
+        name: 'Rushing',
         espnName: 'rushing',
-        headers: ['선수', 'CAR', 'YDS', 'AVG', 'TD', 'LONG'],
+        headers: ['Player', 'CAR', 'YDS', 'AVG', 'TD', 'LONG'],
       },
       {
         key: 'receiving',
-        name: 'Receiving (리시빙)',
+        name: 'Receiving',
         espnName: 'receiving',
-        headers: ['선수', 'REC', 'YDS', 'AVG', 'TD', 'LONG', 'TGTS'],
+        headers: ['Player', 'REC', 'YDS', 'AVG', 'TD', 'LONG', 'TGTS'],
       },
       {
         key: 'defensive',
-        name: 'Defense (수비)',
+        name: 'Defense',
         espnName: 'defensive',
-        headers: ['선수', 'TOT', 'SOLO', 'SACKS', 'TFL', 'PD', 'INT', 'TD'],
+        headers: ['Player', 'TOT', 'SOLO', 'SACKS', 'TFL', 'PD', 'INT', 'TD'],
       },
       {
         key: 'kicking',
-        name: 'Kicking (키킹)',
+        name: 'Kicking',
         espnName: 'kicking',
-        headers: ['선수', 'FG', 'PCT', 'LONG', 'XP', 'PTS'],
+        headers: ['Player', 'FG', 'PCT', 'LONG', 'XP', 'PTS'],
       },
     ];
 
@@ -745,10 +745,10 @@ export async function fetchEspnNflBoxScore(gameId, homeTeam = '', awayTeam = '',
 
     const notes = [];
     if (data.gameInfo?.venue?.fullName) {
-      notes.push({ label: '경기장', value: data.gameInfo.venue.fullName });
+      notes.push({ label: 'Venue', value: data.gameInfo.venue.fullName });
     }
     if (data.weather?.displayValue) {
-      notes.push({ label: '날씨', value: `${data.weather.displayValue} · ${data.weather.temperature || ''}°F` });
+      notes.push({ label: 'Weather', value: `${data.weather.displayValue} · ${data.weather.temperature || ''}°F` });
     }
 
     return {
@@ -774,7 +774,7 @@ export async function fetchUnifiedBoxScore({
   awayAbbr = '',
 }) {
   if (!league) {
-    throw new Error('league 파라미터가 필요합니다.');
+    throw new Error('The league parameter is required.');
   }
 
   const cacheKey = `${league}:${gameId}:${seasonId}:${seriesId}:${gameDate}:${homeAbbr}:${awayAbbr}`;
@@ -800,13 +800,13 @@ export async function fetchUnifiedBoxScore({
         categories: [
           {
             key: 'batting',
-            name: '타자 기록',
+            name: 'Batting',
             awayTable: rawKbo.awayHitters,
             homeTable: rawKbo.homeHitters,
           },
           {
             key: 'pitching',
-            name: '투수 기록',
+            name: 'Pitching',
             awayTable: rawKbo.awayPitchers,
             homeTable: rawKbo.homePitchers,
           },

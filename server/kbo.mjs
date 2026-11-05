@@ -85,7 +85,7 @@ function resolveDateBucket(dateString) {
 }
 
 function relativeUpdatedAt() {
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul',
     hour: '2-digit',
     minute: '2-digit',
@@ -199,23 +199,23 @@ function isOfficialKboMatch({ awayLabel, homeLabel, venue, statusLine }) {
 
 function buildSummary(status, awayName, homeName, venue, awayScore, homeScore) {
   if (status === 'FINAL') {
-    return `${venue}에서 ${awayName} ${awayScore} - ${homeScore} ${homeName}로 경기가 종료됐습니다.`;
+    return `${awayName} ${awayScore} - ${homeScore} ${homeName} final at ${venue}.`;
   }
   if (status === 'LIVE') {
-    return `${venue}에서 ${awayName}와 ${homeName}의 경기가 실시간 진행 중입니다.`;
+    return `${awayName} vs ${homeName} is live at ${venue}.`;
   }
-  return `${venue}에서 ${awayName}와 ${homeName}의 경기가 예정되어 있습니다.`;
+  return `${awayName} vs ${homeName} is scheduled at ${venue}.`;
 }
 
 function buildHeadline(statusLine, awayName, homeName) {
-  if (/경기전/.test(statusLine)) return `${awayName} vs ${homeName} 경기 시작 전`;
-  if (/종료/.test(statusLine)) return `${awayName} vs ${homeName} 경기 종료`;
-  return `${awayName} vs ${homeName} · ${statusLine}`;
+  if (/경기전/.test(statusLine)) return `${awayName} vs ${homeName} scheduled`;
+  if (/종료/.test(statusLine)) return `${awayName} vs ${homeName} final`;
+  return `${awayName} vs ${homeName}`;
 }
 
 function buildKeyStats(awayRow, homeRow) {
   const innings = awayRow.innings.map((awayValue, index) => ({
-    label: `${index + 1}회`,
+    label: `Inning ${index + 1}`,
     value: `${awayValue ?? '-'} - ${homeRow.innings[index] ?? '-'}`,
   }));
 
@@ -261,6 +261,38 @@ function cleanCellText(text) {
     .trim();
 }
 
+const KBO_STAT_LABELS = {
+  선수명: 'Player',
+  타수: 'AB',
+  타석: 'PA',
+  안타: 'H',
+  홈런: 'HR',
+  타점: 'RBI',
+  득점: 'R',
+  타율: 'AVG',
+  도루: 'SB',
+  볼넷: 'BB',
+  사구: 'HBP',
+  삼진: 'SO',
+  이닝: 'IP',
+  피안타: 'H',
+  실점: 'R',
+  자책점: 'ER',
+  평균자책점: 'ERA',
+  투구수: 'Pitches',
+  승: 'W',
+  패: 'L',
+  세이브: 'SV',
+  홀드: 'HLD',
+  경기: 'Game',
+  경기장: 'Venue',
+};
+
+function translateKboLabel(value) {
+  const label = cleanCellText(value);
+  return KBO_STAT_LABELS[label] ?? label;
+}
+
 function normalizeTableRow(row) {
   return row.row.map((cell) => cleanCellText(cell.Text));
 }
@@ -304,7 +336,7 @@ async function resolvePitcherName(playerId) {
 }
 
 async function normalizeBoxScoreTable(table, title, resolvePitcherNames = false) {
-  const headers = normalizeTableHeaders(table.headers);
+  const headers = normalizeTableHeaders(table.headers).map(translateKboLabel);
   const rows = await Promise.all(
     (table.rows ?? []).map(async (row) => {
       const normalized = normalizeTableRow(row);
@@ -393,7 +425,7 @@ function parseGamesFromLines(lines) {
       awayTeam: away.name,
       homeScore,
       awayScore,
-      period: statusLine,
+      period: status === 'FINAL' ? 'Final' : status === 'UPCOMING' ? 'Scheduled' : 'Live',
       startTime: `${datePart.replace(/\./g, '-')} ${time}`,
       venue,
       headline: buildHeadline(statusLine, away.name, home.name),
@@ -424,7 +456,7 @@ export async function fetchKboScoreboard() {
   });
 
   if (!response.ok) {
-    throw new Error(`KBO 스코어보드 요청 실패 (${response.status})`);
+    throw new Error(`KBO scoreboard request failed (${response.status})`);
   }
 
   const html = await response.text();
@@ -459,7 +491,7 @@ export async function fetchKboScoreboard() {
       });
 
       if (!pageResponse.ok) {
-        throw new Error(`KBO 날짜별 스코어보드 요청 실패 (${pageResponse.status})`);
+        throw new Error(`KBO scoreboard request failed for the selected date (${pageResponse.status})`);
       }
 
       return pageResponse.text();
@@ -494,7 +526,7 @@ export async function fetchKboBoxScore({
   gameDate,
 }) {
   if (!gameId) {
-    throw new Error('KBO gameId가 필요합니다.');
+    throw new Error('The KBO gameId is required.');
   }
 
   const cacheKey = `${leagueId}:${seriesId}:${seasonId}:${gameId}`;
@@ -524,7 +556,7 @@ export async function fetchKboBoxScore({
   });
 
   if (!response.ok) {
-    throw new Error(`KBO 박스스코어 요청 실패 (${response.status})`);
+    throw new Error(`KBO box score request failed (${response.status})`);
   }
 
   const payload = await response.json();
@@ -537,7 +569,7 @@ export async function fetchKboBoxScore({
     notes: (tables[0]?.rows ?? [])
       .map((row) => normalizeTableRow(row))
       .filter((row) => row[0] && row[1])
-      .map(([label, value]) => ({ label, value })),
+      .map(([label, value]) => ({ label: translateKboLabel(label), value })),
     awayHitters: await normalizeBoxScoreTable(tables[1], 'Away Hitters'),
     homeHitters: await normalizeBoxScoreTable(tables[2], 'Home Hitters'),
     awayPitchers: await normalizeBoxScoreTable(tables[3], 'Away Pitchers', true),

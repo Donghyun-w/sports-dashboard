@@ -153,7 +153,7 @@ function App() {
         const dateOk = matchesScheduleBucket(match, dateFilter, kboReferenceDate);
         const favoriteOk = favoritesOnly ? isFavoriteMatch(match, favoriteTeams) : true;
         const teamOk = scopedTeam
-          ? match.homeAbbr === scopedTeam.abbr || match.awayAbbr === scopedTeam.abbr
+          ? match.league === scopedTeam.league && (match.homeAbbr === scopedTeam.abbr || match.awayAbbr === scopedTeam.abbr)
           : true;
         return leagueOk && dateOk && favoriteOk && teamOk;
       })
@@ -308,7 +308,7 @@ function App() {
         }
 
         if (!response.ok || !payload) {
-          throw new Error(payload?.message ?? '팀 뉴스를 불러오지 못했습니다.');
+          throw new Error(payload?.message ?? 'Unable to load team news.');
         }
 
         if (!cancelled) {
@@ -322,7 +322,7 @@ function App() {
         if (!cancelled) {
           setTeamNewsState({
             loading: false,
-            message: error instanceof Error ? error.message : '팀 뉴스 요청 중 오류가 발생했습니다.',
+            message: error instanceof Error ? error.message : 'An error occurred while loading team news.',
             articles: [],
           });
         }
@@ -381,7 +381,7 @@ function App() {
         }
 
         if (!response.ok || !payload) {
-          throw new Error(payload?.message ?? `${selectedMatch.league} 세부 기록을 불러오지 못했습니다.`);
+          throw new Error(payload?.message ?? `Unable to load ${selectedMatch.league} box score.`);
         }
 
         if (!cancelled) {
@@ -399,7 +399,7 @@ function App() {
         if (!cancelled) {
           setBoxScoreState({
             loading: false,
-            message: error instanceof Error ? error.message : `${selectedMatch.league} 세부 기록 요청 중 오류가 발생했습니다.`,
+            message: error instanceof Error ? error.message : `An error occurred while loading the ${selectedMatch.league} box score.`,
             boxScore: null,
             matchKey,
           });
@@ -435,7 +435,7 @@ function App() {
       }
 
       if (!response.ok || !payload) {
-        throw new Error(payload?.message ?? '점수 데이터를 불러오지 못했습니다.');
+        throw new Error(payload?.message ?? 'Unable to load score data.');
       }
 
       setApiState((current) => {
@@ -450,7 +450,7 @@ function App() {
         };
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
       setApiState((current) => ({
         ...current,
         source: current.matches.length > 0 ? 'live' : 'loading',
@@ -473,7 +473,7 @@ function App() {
       setStandingsState({
         loading: false,
         standings: null,
-        message: '순위표 데이터를 불러오지 못했습니다.',
+        message: 'Unable to load standings.',
       });
     }
   }
@@ -503,12 +503,12 @@ function App() {
             <img className="brand-logo" src={scorelineLogo} alt="Scoreline" />
             <h1>Scoreline</h1>
           </div>
-          <p>실시간 경기 데이터를 불러오는 중입니다.</p>
+          <p>Loading live sports data.</p>
           {apiState.message ? (
             <>
               <span className="loading-message">{apiState.message}</span>
               <button className="loading-retry" onClick={() => void fetchScoreboard()}>
-                다시 시도
+                Try again
               </button>
             </>
           ) : null}
@@ -579,7 +579,7 @@ function App() {
               <p className="section-label">Favorite Watch</p>
               <h2>Favorite Team Updates</h2>
             </div>
-            <span className="match-count">팀별 최근 1경기</span>
+            <span className="match-count">Latest game per team</span>
           </div>
           <div className="favorite-match-grid favorite-team-grid">
             {favoriteRecentMatches.map(({ team, match }) => (
@@ -614,7 +614,7 @@ function App() {
                   onClick={() => toggleFavorite(selectedTeam.abbr, selectedTeam.league)}
                   aria-pressed={isFavoriteTeam(favoriteTeams, selectedTeam.league, selectedTeam.abbr)}
                 >
-                  {isFavoriteTeam(favoriteTeams, selectedTeam.league, selectedTeam.abbr) ? '★ 즐겨찾기됨' : '☆ 즐겨찾기'}
+                  {isFavoriteTeam(favoriteTeams, selectedTeam.league, selectedTeam.abbr) ? '★ Favorited' : '☆ Add Favorite'}
                 </button>
               </div>
             ) : null}
@@ -627,7 +627,7 @@ function App() {
                 type="text"
                 value={teamSearchQuery}
                 onChange={(event) => setTeamSearchQuery(event.target.value)}
-                placeholder="팀명 / 약자 / 리그 검색"
+                placeholder="Search team, abbreviation, or league"
               />
             </label>
             <span className="team-search-meta">
@@ -650,7 +650,7 @@ function App() {
               </button>
             ))}
           </div>
-          {visibleTeamProfiles.length === 0 ? <div className="empty-card team-empty">검색된 팀이 없습니다.</div> : null}
+          {visibleTeamProfiles.length === 0 ? <div className="empty-card team-empty">No teams found.</div> : null}
         </section>
       ) : null}
 
@@ -739,7 +739,7 @@ function App() {
 
             {filteredMatches.length === 0 ? (
               <div className="empty-card schedule-empty">
-                <p>선택한 조건에 맞는 경기가 없습니다.</p>
+                <p>No games match the selected filters.</p>
                 {leagueFilter !== 'ALL' && dateFilter !== 'UPCOMING' && leagueUpcomingMatches.length > 0 ? (
                   <button
                     className="empty-action"
@@ -749,7 +749,7 @@ function App() {
                       setScheduleTeamKey(null);
                     }}
                   >
-                    {leagueFilter} 예정 경기 보기 · {leagueUpcomingMatches.length} games
+                    View {leagueFilter} upcoming games · {leagueUpcomingMatches.length} games
                   </button>
                 ) : null}
               </div>
@@ -807,8 +807,8 @@ function App() {
                       <span>{selectedMatch.league} · {selectedMatch.lastUpdated}</span>
                     </div>
                     <div className="team-stats-sides">
-                      <span>원정 · {selectedMatch.awayAbbr ?? selectedMatch.awayTeam}</span>
-                      <span>홈 · {selectedMatch.homeAbbr ?? selectedMatch.homeTeam}</span>
+                      <span>Away · {selectedMatch.awayAbbr ?? selectedMatch.awayTeam}</span>
+                      <span>Home · {selectedMatch.homeAbbr ?? selectedMatch.homeTeam}</span>
                     </div>
                   </div>
                   <div className="bar-list">
@@ -823,7 +823,7 @@ function App() {
                 <section className="detail-card">
                   <h4>Play-By-Play</h4>
                   <div className="timeline">
-                    {(selectedMatch.playByPlay ?? ['아직 제공된 이벤트가 없습니다.']).map((item) => (
+                    {(selectedMatch.playByPlay ?? ['No events are available yet.']).map((item) => (
                       <div key={item} className="timeline-row">
                         <span className="timeline-dot" />
                         <p>{item}</p>
@@ -845,10 +845,10 @@ function App() {
               {detailTab === 'records' ? (
                 <div className="boxscore-stack">
                   {boxScoreState.loading ? (
-                    <div className="empty-card">{selectedMatch.league} 세부 기록(Box Score)을 불러오는 중입니다...</div>
+                    <div className="empty-card">Loading {selectedMatch.league} box score...</div>
                   ) : null}
                   {!boxScoreState.loading && !boxScoreState.boxScore ? (
-                    <div className="empty-card">{boxScoreState.message ?? '표시할 세부 기록이 없습니다.'}</div>
+                    <div className="empty-card">{boxScoreState.message ?? 'No box score is available.'}</div>
                   ) : null}
                   {boxScoreState.boxScore ? (
                     <>
@@ -870,7 +870,7 @@ function App() {
                         <div className="kbo-toolbar">
                           {boxScoreState.boxScore.categories.length > 1 ? (
                             <div className="kbo-toolbar-section">
-                              <span className="kbo-toolbar-label">기록 부문</span>
+                              <span className="kbo-toolbar-label">Stat Category</span>
                               <div className="kbo-toolbar-group">
                                 {boxScoreState.boxScore.categories.map((cat) => (
                                   <button
@@ -885,19 +885,19 @@ function App() {
                             </div>
                           ) : null}
                           <div className="kbo-toolbar-section team-select">
-                            <span className="kbo-toolbar-label">팀 선택</span>
+                            <span className="kbo-toolbar-label">Team</span>
                             <div className="kbo-toolbar-group">
                               <button
                                 className={`kbo-pill team-pill ${boxScoreTeamSide === 'away' ? 'active' : ''}`}
                                 onClick={() => setBoxScoreTeamSide('away')}
                               >
-                                원정 · {selectedMatch.awayAbbr ?? selectedMatch.awayTeam}
+                                Away · {selectedMatch.awayAbbr ?? selectedMatch.awayTeam}
                               </button>
                               <button
                                 className={`kbo-pill team-pill ${boxScoreTeamSide === 'home' ? 'active' : ''}`}
                                 onClick={() => setBoxScoreTeamSide('home')}
                               >
-                                홈 · {selectedMatch.homeAbbr ?? selectedMatch.homeTeam}
+                                Home · {selectedMatch.homeAbbr ?? selectedMatch.homeTeam}
                               </button>
                             </div>
                           </div>
@@ -911,7 +911,7 @@ function App() {
               ) : null}
             </>
           ) : (
-            <div className="empty-card">경기를 선택해주세요.</div>
+            <div className="empty-card">Select a game to view details.</div>
           )}
         </section>
       </section>
@@ -926,9 +926,9 @@ function App() {
             <span className="league-badge">{selectedTeam.league}</span>
           </div>
           <div className="news-list">
-            {teamNewsState.loading ? <div className="empty-card">뉴스를 불러오는 중입니다.</div> : null}
+            {teamNewsState.loading ? <div className="empty-card">Loading news...</div> : null}
             {!teamNewsState.loading && teamNewsState.articles.length === 0 ? (
-              <div className="empty-card">{teamNewsState.message ?? '표시할 뉴스가 없습니다.'}</div>
+              <div className="empty-card">{teamNewsState.message ?? 'No news is available.'}</div>
             ) : null}
             {teamNewsState.articles.map((article) => (
               <a key={`${article.link}-${article.pubDate}`} className="news-card" href={article.link} target="_blank" rel="noreferrer">
@@ -976,7 +976,7 @@ function MatchTeam({
           event.stopPropagation();
           onToggleFavorite(abbr, match.league);
         }}
-        aria-label={`${team} 즐겨찾기`}
+        aria-label={`Favorite ${team}`}
       >
         ★
       </button>
@@ -1035,7 +1035,7 @@ function FavoriteRecentCard({
             </div>
           </div>
         </div>
-        <p>최근 경기 데이터가 없습니다.</p>
+      <p>No recent game data is available.</p>
       </article>
     );
   }
@@ -1074,12 +1074,12 @@ function FavoriteRecentCard({
 
 function BoxScoreRecordTable({ title, table }: { title: string; table: BoxScoreTable }) {
   const headers = table.headers;
-  const compact = headers.includes('평균자책점') || headers.length > 8;
+  const compact = headers.includes('ERA') || headers.includes('평균자책점') || headers.length > 8;
 
   return (
     <section className="detail-card boxscore-record-card">
       <h4>{title}</h4>
-      <p className="table-scroll-hint">표를 좌우로 스크롤해 전체 기록을 확인하세요.</p>
+      <p className="table-scroll-hint">Scroll horizontally to view all statistics.</p>
       <div className="kbo-record-table-wrap boxscore-table-wrap">
         <table className={`kbo-record-table boxscore-table ${compact ? 'compact' : ''}`}>
           <thead>
@@ -1154,12 +1154,12 @@ function StatBar({
     <div className="stat-card-row">
       <div className="stat-card-values">
         <div className="stat-side away-side">
-          <span>원정 · {match.awayAbbr ?? match.awayTeam}</span>
+          <span>Away · {match.awayAbbr ?? match.awayTeam}</span>
           <strong>{awayDisplay}</strong>
         </div>
         <span className="stat-label">{stat.label}</span>
         <div className="stat-side home-side">
-          <span>홈 · {match.homeAbbr ?? match.homeTeam}</span>
+          <span>Home · {match.homeAbbr ?? match.homeTeam}</span>
           <strong>{homeDisplay}</strong>
         </div>
       </div>
@@ -1302,7 +1302,7 @@ function formatNewsDate(pubDate: string) {
     return pubDate;
   }
 
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul',
     month: 'short',
     day: 'numeric',
@@ -1343,7 +1343,7 @@ function StandingsView({
         <div className="standings-snapshot-header">
           <h4>Matchup Snapshot · {selectedMatch.league}</h4>
           <button className="standings-refresh-mini" onClick={onRefresh} disabled={standingsState.loading}>
-            {standingsState.loading ? '갱신 중...' : '순위 새로고침'}
+            {standingsState.loading ? 'Refreshing...' : 'Refresh Standings'}
           </button>
         </div>
         <div className="notes-grid">
@@ -1351,23 +1351,23 @@ function StandingsView({
             <span>
               {selectedMatch.awayTeam} {selectedMatch.awayAbbr ? `(${selectedMatch.awayAbbr})` : ''}
             </span>
-            <strong>{selectedMatch.awayRecord ?? '성적 정보 없음'}</strong>
+            <strong>{selectedMatch.awayRecord ?? 'Record unavailable'}</strong>
           </div>
           <div>
             <span>
               {selectedMatch.homeTeam} {selectedMatch.homeAbbr ? `(${selectedMatch.homeAbbr})` : ''}
             </span>
-            <strong>{selectedMatch.homeRecord ?? '성적 정보 없음'}</strong>
+            <strong>{selectedMatch.homeRecord ?? 'Record unavailable'}</strong>
           </div>
         </div>
       </section>
 
       {standingsState.loading && !currentData ? (
-        <div className="empty-card">{selectedLeague} 순위표를 불러오는 중입니다...</div>
+        <div className="empty-card">Loading {selectedLeague} standings...</div>
       ) : null}
 
       {!standingsState.loading && !currentData ? (
-        <div className="empty-card">{standingsState.message ?? '순위표 데이터를 불러올 수 없습니다.'}</div>
+        <div className="empty-card">{standingsState.message ?? 'Standings are unavailable.'}</div>
       ) : null}
 
       {currentData?.groups?.map((group) => (
@@ -1405,7 +1405,7 @@ function StandingsView({
                           <TeamEmblem team={row.team} abbr={row.abbr} league={selectedLeague} size="sm" />
                           <div className="standing-team-name-wrap">
                             <span className="standing-team-name">{row.team}</span>
-                            {isSelectedGame ? <span className="standing-tag-current">선택 경기</span> : null}
+                            {isSelectedGame ? <span className="standing-tag-current">Selected Game</span> : null}
                             {isFav ? <span className="standing-tag-fav">★</span> : null}
                           </div>
                         </div>

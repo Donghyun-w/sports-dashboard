@@ -32,7 +32,7 @@ async function fetchJson(path, params, apiKey) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`BALLDONTLIE 요청 실패 (${response.status}): ${text || response.statusText}`);
+    throw new Error(`BALLDONTLIE request failed (${response.status}): ${text || response.statusText}`);
   }
 
   return response.json();

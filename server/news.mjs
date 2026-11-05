@@ -156,25 +156,25 @@ function formatDisplayDate(pubDate) {
   const diffDay = Math.floor(diffHour / 24);
 
   if (diffSec < 60 && diffSec >= 0) {
-    return '방금 전';
+    return 'Just now';
   }
   if (diffMin < 60 && diffMin >= 0) {
-    return `${Math.max(1, diffMin)}분 전`;
+    return `${Math.max(1, diffMin)}m ago`;
   }
   if (diffHour < 24 && diffHour >= 0) {
-    return `${diffHour}시간 전`;
+    return `${diffHour}h ago`;
   }
   if (diffDay === 1) {
-    const time = new Intl.DateTimeFormat('ko-KR', {
+    const time = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Seoul',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
     }).format(new Date(parsed));
-    return `어제 ${time}`;
+    return `Yesterday ${time}`;
   }
 
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul',
     month: 'short',
     day: 'numeric',
