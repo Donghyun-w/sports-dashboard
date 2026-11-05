@@ -1447,8 +1447,64 @@ button {
 }
 
 @media (max-width: 720px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    min-width: 0;
+  }
+
   .desktop-shell {
-    padding: 18px;
+    width: 100%;
+    max-width: 100%;
+    padding: 12px;
+  }
+
+  .hero,
+  .team-strip,
+  .favorite-focus,
+  .schedule-panel,
+  .detail-panel,
+  .team-news-center {
+    width: 100%;
+    min-width: 0;
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .board-layout,
+  .detail-panel,
+  .detail-card,
+  .team-stats-card,
+  .period-score-section {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .detail-panel {
+    min-height: 0;
+  }
+
+  .detail-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .detail-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .detail-tabs button {
+    flex: none;
+    padding: 9px 12px;
+    font-size: 0.8rem;
   }
 
   .row-main {
@@ -1469,21 +1525,49 @@ button {
   }
 
   .team-stats-header {
-    grid-template-columns: minmax(80px, 1fr) auto minmax(80px, 1fr);
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .team-stats-team,
+  .team-stats-title {
+    min-width: 0;
+  }
+
+  .team-stats-team span,
+  .team-stats-header span {
+    overflow-wrap: anywhere;
+    font-size: 0.72rem;
   }
 
   .team-stats-team strong {
-    font-size: 1.35rem;
+    font-size: 1.2rem;
   }
 
-  .stat-card-values {
-    grid-template-columns: 1fr;
+  .period-score-section {
+    padding: 12px;
   }
 
-  .home-side,
-  .stat-label {
-    text-align: left;
+  .period-score-heading {
+    align-items: flex-start;
+  }
+
+  .period-score-heading span {
+    text-align: right;
+  }
+
+  .period-score-table {
+    min-width: 420px;
+  }
+
+  .period-horizontal-row {
+    grid-template-columns: 22px 20px minmax(0, 1fr) 20px;
+    gap: 5px;
+  }
+
+  .period-horizontal-score,
+  .period-horizontal-label {
+    font-size: 0.72rem;
   }
 
   .kbo-toolbar {
