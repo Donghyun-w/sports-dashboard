@@ -659,24 +659,35 @@ button {
 }
 
 .team-stats-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto minmax(110px, 1fr);
+  align-items: center;
+  gap: 18px;
   margin-bottom: 18px;
 }
 
 .team-stats-header span,
-.team-stats-sides {
+.team-stats-team span {
   color: rgba(233, 239, 255, 0.62);
   font-size: 0.88rem;
 }
 
-.team-stats-sides {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.team-stats-title {
+  text-align: center;
+}
+
+.team-stats-team {
+  display: grid;
+  gap: 3px;
+}
+
+.team-stats-team strong {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.team-stats-team.home {
+  text-align: right;
 }
 
 .notes-grid {
@@ -693,6 +704,149 @@ button {
 .timeline {
   display: grid;
   gap: 16px;
+}
+
+.period-score-section {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.period-score-heading,
+.period-chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.period-score-heading h5 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.period-score-heading span,
+.period-chart-legend {
+  color: rgba(233, 239, 255, 0.58);
+  font-size: 0.78rem;
+}
+
+.period-score-table-wrap {
+  overflow-x: auto;
+  margin-top: 14px;
+}
+
+.period-score-table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+.period-score-table th,
+.period-score-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.period-score-table thead th {
+  color: rgba(233, 239, 255, 0.56);
+  font-weight: 700;
+}
+
+.period-score-table th:first-child {
+  min-width: 118px;
+  text-align: left;
+}
+
+.period-score-table tbody th {
+  font-weight: 700;
+}
+
+.period-horizontal-chart {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.period-horizontal-row {
+  display: grid;
+  grid-template-columns: 28px 24px minmax(150px, 1fr) 24px;
+  align-items: center;
+  gap: 8px;
+}
+
+.period-horizontal-label {
+  color: rgba(233, 239, 255, 0.64);
+  font-size: 0.76rem;
+}
+
+.period-horizontal-score {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.period-horizontal-score.away {
+  text-align: right;
+  color: #a9beff;
+}
+
+.period-horizontal-score.home {
+  color: #ffc1a8;
+}
+
+.period-horizontal-track {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  height: 14px;
+}
+
+.period-horizontal-half {
+  display: flex;
+  align-items: stretch;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.period-horizontal-half.away {
+  justify-content: flex-end;
+}
+
+.period-horizontal-half.home {
+  justify-content: flex-start;
+}
+
+.period-horizontal-half i {
+  display: block;
+  min-width: 3px;
+  border-radius: inherit;
+}
+
+.period-horizontal-half.away i,
+.period-chart-legend .away {
+  background: #7a9dff;
+}
+
+.period-horizontal-half.home i,
+.period-chart-legend .home {
+  background: #f19a74;
+}
+
+.period-chart-legend {
+  justify-content: center;
+  margin-top: 12px;
+  gap: 7px;
+}
+
+.period-chart-legend span {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  margin-left: 8px;
 }
 
 .stat-card-row {
@@ -1315,11 +1469,12 @@ button {
   }
 
   .team-stats-header {
-    flex-direction: column;
+    grid-template-columns: minmax(80px, 1fr) auto minmax(80px, 1fr);
+    gap: 10px;
   }
 
-  .team-stats-sides {
-    justify-content: flex-start;
+  .team-stats-team strong {
+    font-size: 1.35rem;
   }
 
   .stat-card-values {

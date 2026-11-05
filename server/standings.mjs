@@ -1,6 +1,19 @@
 const STANDINGS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const standingsCache = new Map();
 
+const NBA_ABBR_ALIASES = {
+  GS: 'GSW',
+  NO: 'NOP',
+  NY: 'NYK',
+  SA: 'SAS',
+  UTAH: 'UTA',
+  WSH: 'WAS',
+};
+
+function normalizeNbaAbbr(abbr) {
+  return NBA_ABBR_ALIASES[abbr] ?? abbr;
+}
+
 export async function fetchNbaStandings() {
   try {
     const res = await fetch('https://site.api.espn.com/apis/v2/sports/basketball/nba/standings', {
@@ -18,7 +31,7 @@ export async function fetchNbaStandings() {
 
       const rows = entries.map((entry) => {
         const teamName = entry.team?.displayName || entry.team?.name || 'Team';
-        const abbr = entry.team?.abbreviation || '';
+        const abbr = normalizeNbaAbbr(entry.team?.abbreviation || '');
         const statsMap = Object.fromEntries((entry.stats ?? []).map((s) => [s.name, s.displayValue]));
 
         const seed = statsMap.playoffSeed || statsMap.rank || '-';

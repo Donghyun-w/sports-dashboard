@@ -6,7 +6,7 @@ import { getTeamBrand, TeamEmblem } from './teamBranding';
 import type { AllStandings, BoxScoreCategory, BoxScoreTable, League, Match, LeagueBoxScore, ScheduleBucket } from './types';
 
 type LeagueFilter = 'ALL' | League;
-type DetailTab = 'stats' | 'play' | 'standings' | 'records';
+type DetailTab = 'stats' | 'standings' | 'records';
 
 type ApiState = {
   matches: Match[];
@@ -776,9 +776,6 @@ function App() {
                 <button className={detailTab === 'stats' ? 'active' : ''} onClick={() => setDetailTab('stats')}>
                   Stats
                 </button>
-                <button className={detailTab === 'play' ? 'active' : ''} onClick={() => setDetailTab('play')}>
-                  Play-By-Play
-                </button>
                 <button className={detailTab === 'standings' ? 'active' : ''} onClick={() => setDetailTab('standings')}>
                   Standings
                 </button>
@@ -790,32 +787,23 @@ function App() {
               {detailTab === 'stats' ? (
                 <section className="detail-card team-stats-card">
                   <div className="team-stats-header">
-                    <div>
+                    <div className="team-stats-team away">
+                      <span>Away · {selectedMatch.awayAbbr ?? selectedMatch.awayTeam}</span>
+                      <strong>{selectedMatch.awayScore}</strong>
+                    </div>
+                    <div className="team-stats-title">
                       <h4>Team Stats</h4>
                       <span>{selectedMatch.league} · {selectedMatch.lastUpdated}</span>
                     </div>
-                    <div className="team-stats-sides">
-                      <span>Away · {selectedMatch.awayAbbr ?? selectedMatch.awayTeam}</span>
+                    <div className="team-stats-team home">
                       <span>Home · {selectedMatch.homeAbbr ?? selectedMatch.homeTeam}</span>
+                      <strong>{selectedMatch.homeScore}</strong>
                     </div>
                   </div>
                   <div className="bar-list">
-                    {selectedMatch.keyStats.map((stat) => (
+                    <PeriodScoreView match={selectedMatch} />
+                    {selectedMatch.keyStats.filter((stat) => !isPeriodStat(stat.label)).map((stat) => (
                       <StatBar key={stat.label} stat={stat} match={selectedMatch} />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {detailTab === 'play' ? (
-                <section className="detail-card">
-                  <h4>Play-By-Play</h4>
-                  <div className="timeline">
-                    {(selectedMatch.playByPlay ?? ['No events are available yet.']).map((item) => (
-                      <div key={item} className="timeline-row">
-                        <span className="timeline-dot" />
-                        <p>{item}</p>
-                      </div>
                     ))}
                   </div>
                 </section>
@@ -1158,6 +1146,95 @@ function StatBar({
         </div>
       ) : null}
     </div>
+  );
+}
+
+type PeriodScore = {
+  label: string;
+  away: number;
+  home: number;
+};
+
+function isPeriodStat(label: string) {
+  return /^(?:Q\d+|\d+Q|OT\d*|\d+OT)$/i.test(label.trim());
+}
+
+function getPeriodScores(match: Match): PeriodScore[] {
+  return match.keyStats
+    .filter((stat) => isPeriodStat(stat.label))
+    .map((stat) => {
+      const [awayText = '0', homeText = '0'] = stat.value.split('-').map((value) => value.trim());
+      return {
+        label: formatPeriodLabel(stat.label),
+        away: typeof stat.awayValue === 'number' ? stat.awayValue : Number(awayText) || 0,
+        home: typeof stat.homeValue === 'number' ? stat.homeValue : Number(homeText) || 0,
+      };
+    });
+}
+
+function formatPeriodLabel(label: string) {
+  const compact = label.replaceAll(' ', '').toUpperCase();
+  const quarterLast = compact.match(/^(\d+)Q$/);
+  if (quarterLast) return `Q${quarterLast[1]}`;
+  return compact;
+}
+
+function PeriodScoreView({ match }: { match: Match }) {
+  const periods = getPeriodScores(match);
+  if (periods.length === 0) return null;
+
+  const maxScore = Math.max(...periods.flatMap((period) => [period.away, period.home]), 1);
+  const awayTotal = periods.reduce((total, period) => total + period.away, 0);
+  const homeTotal = periods.reduce((total, period) => total + period.home, 0);
+
+  return (
+    <section className="period-score-section" aria-label="Period scoring">
+      <div className="period-score-heading">
+        <h5>Period Scoring</h5>
+        <span>Away vs Home</span>
+      </div>
+      <div className="period-score-table-wrap">
+        <table className="period-score-table">
+          <thead>
+            <tr>
+              <th>Team</th>
+              {periods.map((period) => <th key={period.label}>{period.label}</th>)}
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>Away · {match.awayAbbr ?? match.awayTeam}</th>
+              {periods.map((period) => <td key={`away-${period.label}`}>{period.away}</td>)}
+              <td><strong>{awayTotal}</strong></td>
+            </tr>
+            <tr>
+              <th>Home · {match.homeAbbr ?? match.homeTeam}</th>
+              {periods.map((period) => <td key={`home-${period.label}`}>{period.home}</td>)}
+              <td><strong>{homeTotal}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="period-horizontal-chart" aria-label="Period score comparison chart">
+        {periods.map((period) => (
+          <div className="period-horizontal-row" key={`chart-${period.label}`}>
+            <strong className="period-horizontal-label">{period.label}</strong>
+            <span className="period-horizontal-score away">{period.away}</span>
+            <div className="period-horizontal-track">
+              <div className="period-horizontal-half away">
+                <i style={{ width: `${(period.away / maxScore) * 100}%` }} />
+              </div>
+              <div className="period-horizontal-half home">
+                <i style={{ width: `${(period.home / maxScore) * 100}%` }} />
+              </div>
+            </div>
+            <span className="period-horizontal-score home">{period.home}</span>
+          </div>
+        ))}
+      </div>
+      <div className="period-chart-legend"><span className="away" />Away <span className="home" />Home</div>
+    </section>
   );
 }
 

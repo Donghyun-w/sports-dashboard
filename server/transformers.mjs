@@ -213,10 +213,10 @@ export function transformNbaGames(payload) {
           ? `${game.home_team.name} ${game.home_team_score} - ${game.visitor_team_score} ${game.visitor_team.name} final.`
           : `NBA game status: ${game.status}.`,
       keyStats: [
-        { label: 'Q1', value: `${game.visitor_q1 ?? 0} - ${game.home_q1 ?? 0}` },
-        { label: 'Q2', value: `${game.visitor_q2 ?? 0} - ${game.home_q2 ?? 0}` },
-        { label: 'Q3', value: `${game.visitor_q3 ?? 0} - ${game.home_q3 ?? 0}` },
-        { label: 'Q4', value: `${game.visitor_q4 ?? 0} - ${game.home_q4 ?? 0}` },
+        { label: 'Q1', value: `${game.visitor_q1 ?? 0} - ${game.home_q1 ?? 0}`, awayValue: game.visitor_q1 ?? 0, homeValue: game.home_q1 ?? 0 },
+        { label: 'Q2', value: `${game.visitor_q2 ?? 0} - ${game.home_q2 ?? 0}`, awayValue: game.visitor_q2 ?? 0, homeValue: game.home_q2 ?? 0 },
+        { label: 'Q3', value: `${game.visitor_q3 ?? 0} - ${game.home_q3 ?? 0}`, awayValue: game.visitor_q3 ?? 0, homeValue: game.home_q3 ?? 0 },
+        { label: 'Q4', value: `${game.visitor_q4 ?? 0} - ${game.home_q4 ?? 0}`, awayValue: game.visitor_q4 ?? 0, homeValue: game.home_q4 ?? 0 },
       ],
       lastUpdated: relativeUpdatedAt(),
     }))
@@ -245,10 +245,10 @@ export function transformNflGames(payload) {
       headline: `Week ${game.week} · ${game.home_team.name} vs ${game.visitor_team.name}`,
       summary: game.summary || `NFL game status: ${game.status}.`,
       keyStats: [
-        { label: 'Q1', value: `${game.visitor_team_q1 ?? 0} - ${game.home_team_q1 ?? 0}` },
-        { label: 'Q2', value: `${game.visitor_team_q2 ?? 0} - ${game.home_team_q2 ?? 0}` },
-        { label: 'Q3', value: `${game.visitor_team_q3 ?? 0} - ${game.home_team_q3 ?? 0}` },
-        { label: 'Q4', value: `${game.visitor_team_q4 ?? 0} - ${game.home_team_q4 ?? 0}` },
+        { label: 'Q1', value: `${game.visitor_team_q1 ?? 0} - ${game.home_team_q1 ?? 0}`, awayValue: game.visitor_team_q1 ?? 0, homeValue: game.home_team_q1 ?? 0 },
+        { label: 'Q2', value: `${game.visitor_team_q2 ?? 0} - ${game.home_team_q2 ?? 0}`, awayValue: game.visitor_team_q2 ?? 0, homeValue: game.home_team_q2 ?? 0 },
+        { label: 'Q3', value: `${game.visitor_team_q3 ?? 0} - ${game.home_team_q3 ?? 0}`, awayValue: game.visitor_team_q3 ?? 0, homeValue: game.home_team_q3 ?? 0 },
+        { label: 'Q4', value: `${game.visitor_team_q4 ?? 0} - ${game.home_team_q4 ?? 0}`, awayValue: game.visitor_team_q4 ?? 0, homeValue: game.home_team_q4 ?? 0 },
       ],
       lastUpdated: relativeUpdatedAt(),
     }))
