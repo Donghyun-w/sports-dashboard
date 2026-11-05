@@ -1,6 +1,5 @@
 import { createServer } from 'node:http';
 import { fetchEspnNbaScoreboard, fetchEspnNflScoreboard, fetchNbaGames, fetchNflGames } from './balldontlie.mjs';
-import { fetchKboBoxScore, fetchKboScoreboard } from './kbo.mjs';
 import { fetchTeamNews } from './news.mjs';
 import { fetchUnifiedBoxScore } from './boxscore.mjs';
 import { fetchUnifiedStandings } from './standings.mjs';
@@ -33,7 +32,7 @@ function dedupeMatches(matches) {
 }
 
 function retainCachedLeagueMatches(matches) {
-  return ['NBA', 'NFL', 'KBO'].flatMap((league) => {
+  return ['NBA', 'NFL'].flatMap((league) => {
     const freshMatches = matches.filter((match) => match.league === league);
     const cachedMatches = cachedMatchesByLeague.get(league) ?? [];
     const stableMatches = dedupeMatches([...freshMatches, ...cachedMatches]);
@@ -86,28 +85,18 @@ async function handleScoreboard(response) {
       })(),
     );
 
-    // 3. KBO: Official Scraper
-    tasks.push(
-      fetchKboScoreboard().catch((error) => {
-        console.error('KBO fetch error:', error?.message || error);
-        return [];
-      }),
-    );
-
     const settled = await Promise.allSettled(tasks);
     const freshMatches = settled.flatMap((result) => (result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
     const matches = retainCachedLeagueMatches(freshMatches);
     const hasNbaMatches = matches.some((match) => match.league === 'NBA');
     const hasNflMatches = matches.some((match) => match.league === 'NFL');
-    const hasKboMatches = matches.some((match) => match.league === 'KBO');
     const messageParts = [];
 
-    if (hasNbaMatches && hasNflMatches && hasKboMatches) {
-      messageParts.push('Live data is available for NBA, NFL, and KBO');
+    if (hasNbaMatches && hasNflMatches) {
+      messageParts.push('Live data is available for NBA and NFL');
     } else {
       if (hasNbaMatches) messageParts.push('NBA live data connected');
       if (hasNflMatches) messageParts.push('NFL live data connected');
-      if (hasKboMatches) messageParts.push('KBO official scoreboard connected');
     }
 
     sendJson(response, 200, {
@@ -179,7 +168,7 @@ async function handleStandings(requestUrl, response) {
 }
 
 async function handleUnifiedBoxScore(requestUrl, response) {
-  const league = requestUrl.searchParams.get('league') ?? 'KBO';
+  const league = requestUrl.searchParams.get('league') ?? 'NBA';
   const gameId = requestUrl.searchParams.get('gameId') ?? '';
   const seasonId = requestUrl.searchParams.get('seasonId') ?? '';
   const seriesId = requestUrl.searchParams.get('seriesId') ?? '0';
@@ -214,40 +203,6 @@ async function handleUnifiedBoxScore(requestUrl, response) {
   }
 }
 
-async function handleKboBoxScore(requestUrl, response) {
-  const gameId = requestUrl.searchParams.get('gameId');
-  const seasonId = requestUrl.searchParams.get('seasonId') ?? '';
-  const seriesId = requestUrl.searchParams.get('seriesId') ?? '0';
-  const gameDate = requestUrl.searchParams.get('gameDate') ?? '';
-
-  if (!gameId) {
-    sendJson(response, 400, {
-      boxScore: null,
-      message: 'The gameId parameter is required.',
-    });
-    return;
-  }
-
-  try {
-    const boxScore = await fetchKboBoxScore({
-      gameId,
-      seasonId,
-      seriesId,
-      gameDate,
-    });
-
-    sendJson(response, 200, {
-      boxScore,
-      message: boxScore ? 'KBO box score loaded.' : 'No KBO box score is available.',
-    });
-  } catch (error) {
-    sendJson(response, 502, {
-      boxScore: null,
-      message: error instanceof Error ? error.message : 'An error occurred while loading the KBO box score.',
-    });
-  }
-}
-
 const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host}`);
 
@@ -278,11 +233,6 @@ const server = createServer(async (request, response) => {
 
   if (request.method === 'GET' && requestUrl.pathname === '/api/standings') {
     await handleStandings(requestUrl, response);
-    return;
-  }
-
-  if (request.method === 'GET' && requestUrl.pathname === '/api/kbo-boxscore') {
-    await handleKboBoxScore(requestUrl, response);
     return;
   }
 

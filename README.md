@@ -1,30 +1,92 @@
-# Sport Dashboard
+# Scoreline
 
-NBA와 NFL의 라이브 스코어, 경기 결과, 경기 요약을 보여주는 대시보드입니다.
+NBA와 NFL의 실시간 스코어, 경기 상세 정보, 팀 뉴스, 순위를 한 화면에서 확인하는 스포츠 대시보드입니다.
 
-## 사용 API
+## Features
 
-- [BALLDONTLIE 메인 사이트](https://www.balldontlie.io/)
-- [NBA API 문서](https://docs.balldontlie.io/)
-- [NFL API 문서](https://nfl.balldontlie.io/)
+- NBA/NFL 리그 및 팀별 경기 일정 필터
+- Yesterday, Today, Upcoming 일정 보기
+- 팀 즐겨찾기와 즐겨찾기 팀의 최근 경기 요약
+- 경기 상세 정보: 팀 스탯, Play-by-Play, 리그 순위, Box Score
+- 팀 선택 기반 영어 뉴스 피드
+- NBA/NFL 팀 로고와 팀 검색
+- API 데이터를 불러오지 못하면 재시도 화면 표시
 
-## 실행 방법
+## Tech Stack
 
-1. `.env.example`을 복사해서 `.env.local`을 만듭니다.
-2. `BALLDONTLIE_API_KEY`에 발급받은 키를 넣습니다.
-3. 한 터미널에서 API 서버를 실행합니다.
-4. 다른 터미널에서 웹 화면을 실행합니다.
+- React 18
+- TypeScript
+- Vite
+- Node.js HTTP server for local API development
+- Vercel Serverless Functions (`/api`)
 
-### API 서버
+## Data Sources
 
-`npm run dev:api`
+- [ESPN](https://www.espn.com/) — NBA/NFL scoreboards, box scores, standings
+- [BALLDONTLIE](https://www.balldontlie.io/) — supplementary NBA/NFL game data
+- [Google News RSS](https://news.google.com/) — English team news
 
-### 웹 화면
+## Getting Started
 
-`npm run dev`
+### 1. Install dependencies
 
-## 참고
+```bash
+npm install
+```
 
-- 프런트엔드가 직접 외부 API 키를 들고 호출하지 않도록 로컬 API 서버를 두었습니다.
-- API 연결에 실패하면 화면은 마지막 데이터 또는 데모 데이터를 유지합니다.
-# my-website
+### 2. Configure environment variables
+
+Copy `.env.example` to `.env.local` and add a BALLDONTLIE API key.
+
+```bash
+cp .env.example .env.local
+```
+
+```env
+BALLDONTLIE_API_KEY=your_balldontlie_api_key_here
+```
+
+The dashboard can still load ESPN-based data when this key is unavailable, but BALLDONTLIE supplementary data will be skipped.
+
+### 3. Run locally
+
+Start the local API server in one terminal:
+
+```bash
+npm run dev:api
+```
+
+Start the Vite development server in another terminal:
+
+```bash
+npm run dev
+```
+
+Open the URL printed by Vite, typically `http://localhost:5173`.
+
+## Available Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Vite development server. |
+| `npm run dev:api` | Start the local API server on port `8787`. |
+| `npm run build` | Create a production build in `dist/`. |
+| `npm run preview` | Preview the production build locally. |
+
+## API Routes
+
+| Route | Description |
+| --- | --- |
+| `/api/scoreboard` | NBA/NFL scoreboards and game schedules. |
+| `/api/boxscore` | NBA/NFL box score for the selected game. |
+| `/api/standings` | NBA/NFL standings. |
+| `/api/team-news` | English news articles for the selected team. |
+
+## Deployment
+
+The project is ready for Vercel deployment. Add `BALLDONTLIE_API_KEY` to the Vercel project environment variables, then deploy the repository. The files in `api/` are served as Vercel Serverless Functions.
+
+## Notes
+
+- Live game availability depends on the upstream providers and their season schedules.
+- If no live data can be fetched, Scoreline shows a loading state with a **Try again** button instead of displaying demo games.

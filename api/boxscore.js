@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   }
 
   const {
-    league = 'KBO',
+    league = 'NBA',
     gameId = '',
     seasonId = '',
     seriesId = '0',

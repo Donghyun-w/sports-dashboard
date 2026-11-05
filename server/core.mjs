@@ -1,5 +1,4 @@
 import { fetchEspnNbaScoreboard, fetchEspnNflScoreboard, fetchNbaGames, fetchNflGames } from './balldontlie.mjs';
-import { fetchKboBoxScore, fetchKboScoreboard } from './kbo.mjs';
 import { fetchTeamNews } from './news.mjs';
 import { fetchUnifiedBoxScore } from './boxscore.mjs';
 import { fetchUnifiedStandings } from './standings.mjs';
@@ -30,7 +29,7 @@ function dedupeMatches(matches) {
 }
 
 function retainCachedLeagueMatches(matches) {
-  return ['NBA', 'NFL', 'KBO'].flatMap((league) => {
+  return ['NBA', 'NFL'].flatMap((league) => {
     const freshMatches = matches.filter((match) => match.league === league);
     const cachedMatches = cachedMatchesByLeague.get(league) ?? [];
     const stableMatches = dedupeMatches([...freshMatches, ...cachedMatches]);
@@ -83,28 +82,18 @@ export async function buildScoreboardPayload(apiKey = process.env.BALLDONTLIE_AP
       })(),
     );
 
-    // 3. KBO: Official Scraper
-    tasks.push(
-      fetchKboScoreboard().catch((error) => {
-        console.error('KBO fetch error:', error?.message || error);
-        return [];
-      }),
-    );
-
     const settled = await Promise.allSettled(tasks);
     const freshMatches = settled.flatMap((result) => (result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
     const matches = retainCachedLeagueMatches(freshMatches);
     const hasNbaMatches = matches.some((match) => match.league === 'NBA');
     const hasNflMatches = matches.some((match) => match.league === 'NFL');
-    const hasKboMatches = matches.some((match) => match.league === 'KBO');
     const messageParts = [];
 
-    if (hasNbaMatches && hasNflMatches && hasKboMatches) {
-      messageParts.push('Live data is available for NBA, NFL, and KBO');
+    if (hasNbaMatches && hasNflMatches) {
+      messageParts.push('Live data is available for NBA and NFL');
     } else {
       if (hasNbaMatches) messageParts.push('NBA live data connected');
       if (hasNflMatches) messageParts.push('NFL live data connected');
-      if (hasKboMatches) messageParts.push('KBO official scoreboard connected');
     }
 
     return {
@@ -161,7 +150,7 @@ export async function buildTeamNewsPayload({ team, league = '', query = '' }) {
 }
 
 export async function buildBoxScorePayload({
-  league = 'KBO',
+  league = 'NBA',
   gameId = '',
   seasonId = '',
   seriesId = '0',
@@ -197,43 +186,6 @@ export async function buildBoxScorePayload({
       payload: {
         boxScore: null,
         message: error instanceof Error ? error.message : `An error occurred while loading the ${league} box score.`,
-      },
-    };
-  }
-}
-
-export async function buildKboBoxScorePayload({ gameId, seasonId = '', seriesId = '0', gameDate = '' }) {
-  if (!gameId) {
-    return {
-      statusCode: 400,
-      payload: {
-        boxScore: null,
-        message: 'The gameId parameter is required.',
-      },
-    };
-  }
-
-  try {
-    const boxScore = await fetchKboBoxScore({
-      gameId,
-      seasonId,
-      seriesId,
-      gameDate,
-    });
-
-    return {
-      statusCode: 200,
-      payload: {
-        boxScore,
-        message: boxScore ? 'KBO box score loaded.' : 'No KBO box score is available.',
-      },
-    };
-  } catch (error) {
-    return {
-      statusCode: 502,
-      payload: {
-        boxScore: null,
-        message: error instanceof Error ? error.message : 'An error occurred while loading the KBO box score.',
       },
     };
   }

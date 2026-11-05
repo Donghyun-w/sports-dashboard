@@ -24,7 +24,7 @@ type TeamNewsArticle = {
   displayDate?: string;
 };
 
-const leagueFilters: LeagueFilter[] = ['ALL', 'NBA', 'NFL', 'KBO'];
+const leagueFilters: LeagueFilter[] = ['ALL', 'NBA', 'NFL'];
 const dateFilters: ScheduleBucket[] = ['YESTERDAY', 'TODAY', 'UPCOMING'];
 const dateFilterLabel: Record<ScheduleBucket, string> = {
   YESTERDAY: 'Yesterday',
@@ -136,21 +136,13 @@ function App() {
     }
   }, [leagueFilter, scheduleTeamKey]);
 
-  const kboReferenceDate = useMemo(() => {
-    const todayKboMatch = apiState.matches.find(
-      (match) => match.league === 'KBO' && match.startDate && resolveMatchBucket(match) === 'TODAY',
-    );
-
-    return todayKboMatch?.startDate ?? new Date().toISOString();
-  }, [apiState.matches]);
-
   const filteredMatches = useMemo(() => {
     const scopedTeam = scheduleTeamKey ? getTeamByKey(scheduleTeamKey) : null;
 
     return apiState.matches
       .filter((match) => {
         const leagueOk = leagueFilter === 'ALL' || match.league === leagueFilter;
-        const dateOk = matchesScheduleBucket(match, dateFilter, kboReferenceDate);
+        const dateOk = matchesScheduleBucket(match, dateFilter);
         const favoriteOk = favoritesOnly ? isFavoriteMatch(match, favoriteTeams) : true;
         const teamOk = scopedTeam
           ? match.league === scopedTeam.league && (match.homeAbbr === scopedTeam.abbr || match.awayAbbr === scopedTeam.abbr)
@@ -167,15 +159,15 @@ function App() {
 
         return left.id - right.id;
       });
-  }, [apiState.matches, dateFilter, favoriteTeams, favoritesOnly, kboReferenceDate, leagueFilter, scheduleTeamKey]);
+  }, [apiState.matches, dateFilter, favoriteTeams, favoritesOnly, leagueFilter, scheduleTeamKey]);
 
   const leagueUpcomingMatches = useMemo(() => {
     if (leagueFilter === 'ALL') return [];
 
     return apiState.matches
-      .filter((match) => match.league === leagueFilter && matchesScheduleBucket(match, 'UPCOMING', kboReferenceDate))
+      .filter((match) => match.league === leagueFilter && matchesScheduleBucket(match, 'UPCOMING'))
       .sort(sortByDateAsc);
-  }, [apiState.matches, kboReferenceDate, leagueFilter]);
+  }, [apiState.matches, leagueFilter]);
 
   const teamProfiles = useMemo(() => {
     return getLeagueTeams(leagueFilter).sort((left, right) => {
@@ -543,10 +535,6 @@ function App() {
             ))}
           </div>
 
-          <span className={`hero-live ${apiState.source}`}>
-            <span aria-hidden="true" />
-            LIVE
-          </span>
         </div>
       </header>
 
@@ -1193,13 +1181,12 @@ function inferDateBucket(match: Match): ScheduleBucket {
   return 'TODAY';
 }
 
-function matchesScheduleBucket(match: Match, bucket: ScheduleBucket, kboReferenceDate: string) {
+function matchesScheduleBucket(match: Match, bucket: ScheduleBucket) {
   if (!match.startDate) {
     return resolveMatchBucket(match) === bucket;
   }
 
-  const referenceDate = match.league === 'KBO' ? kboReferenceDate : new Date().toISOString();
-  const diff = getDayDiff(match.startDate, referenceDate);
+  const diff = getDayDiff(match.startDate, new Date().toISOString());
 
   if (bucket === 'TODAY') return diff === 0;
   if (bucket === 'YESTERDAY') return diff <= -1;
@@ -1224,13 +1211,6 @@ function resolveMatchBucket(match: Match): ScheduleBucket {
   }
 
   return inferDateBucket(match);
-}
-
-function resolveKboBucket(match: Match, referenceDate: string): ScheduleBucket {
-  const diff = getDayDiff(match.startDate, referenceDate);
-  if (diff <= -1) return 'YESTERDAY';
-  if (diff >= 1) return 'UPCOMING';
-  return 'TODAY';
 }
 
 function getDayDiff(matchDate?: string, referenceDate?: string) {

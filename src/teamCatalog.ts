@@ -28,24 +28,6 @@ function nflLogo(abbr: string) {
   return `https://a.espncdn.com/i/teamlogos/nfl/500/${abbr.toLowerCase()}.png`;
 }
 
-const kboLogoCodeMap: Record<string, string> = {
-  DSB: 'OB',
-  HAN: 'HH',
-  KIA: 'HT',
-  KIW: 'WO',
-  KTW: 'KT',
-  LGT: 'LG',
-  LOT: 'LT',
-  NCD: 'NC',
-  SAM: 'SS',
-  SSG: 'SK',
-};
-
-function kboLogo(abbr: string) {
-  const code = kboLogoCodeMap[abbr] ?? abbr;
-  return `https://6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/KBOHome/resources/images/emblem/regular/2026/emblem_${code}.png`;
-}
-
 function team(entry: Omit<TeamCatalogEntry, 'key'>): TeamCatalogEntry {
   return {
     ...entry,
@@ -118,16 +100,6 @@ export const allTeams: TeamCatalogEntry[] = [
   team({ abbr: 'TEN', name: 'Tennessee Titans', league: 'NFL', colors: ['#0C2340', '#4B92DB'], mark: 'T', newsQuery: 'Tennessee Titans NFL', logoUrl: nflLogo('TEN') }),
   team({ abbr: 'WSH', name: 'Washington Commanders', league: 'NFL', colors: ['#5A1414', '#FFB612'], mark: 'W', newsQuery: 'Washington Commanders NFL', logoUrl: nflLogo('WSH') }),
 
-  team({ abbr: 'DSB', name: 'Doosan Bears', league: 'KBO', colors: ['#131230', '#ED1C24'], mark: 'DB', newsQuery: 'Doosan Bears KBO', logoUrl: kboLogo('DSB') }),
-  team({ abbr: 'HAN', name: 'Hanwha Eagles', league: 'KBO', colors: ['#FF6600', '#1E3765'], mark: 'HE', newsQuery: 'Hanwha Eagles KBO', logoUrl: kboLogo('HAN') }),
-  team({ abbr: 'KIA', name: 'KIA Tigers', league: 'KBO', colors: ['#EA0029', '#111111'], mark: 'K', newsQuery: 'KIA Tigers KBO', logoUrl: kboLogo('KIA') }),
-  team({ abbr: 'KIW', name: 'Kiwoom Heroes', league: 'KBO', colors: ['#5B0D1B', '#B79E6E'], mark: 'KH', newsQuery: 'Kiwoom Heroes KBO', logoUrl: kboLogo('KIW') }),
-  team({ abbr: 'KTW', name: 'KT Wiz', league: 'KBO', colors: ['#111111', '#ED1B2F'], mark: 'KT', newsQuery: 'KT Wiz KBO', logoUrl: kboLogo('KTW') }),
-  team({ abbr: 'LGT', name: 'LG Twins', league: 'KBO', colors: ['#A50034', '#C6C9CA'], mark: 'LG', newsQuery: 'LG Twins KBO', logoUrl: kboLogo('LGT') }),
-  team({ abbr: 'LOT', name: 'Lotte Giants', league: 'KBO', colors: ['#002955', '#E31B23'], mark: 'LT', newsQuery: 'Lotte Giants KBO', logoUrl: kboLogo('LOT') }),
-  team({ abbr: 'NCD', name: 'NC Dinos', league: 'KBO', colors: ['#1D467D', '#C2A25D'], mark: 'NC', newsQuery: 'NC Dinos KBO', logoUrl: kboLogo('NCD') }),
-  team({ abbr: 'SAM', name: 'Samsung Lions', league: 'KBO', colors: ['#074CA1', '#FFFFFF'], mark: 'SL', newsQuery: 'Samsung Lions KBO', logoUrl: kboLogo('SAM') }),
-  team({ abbr: 'SSG', name: 'SSG Landers', league: 'KBO', colors: ['#CE0E2D', '#FDB827'], mark: 'SSG', newsQuery: 'SSG Landers KBO', logoUrl: kboLogo('SSG') }),
 ];
 
 export const teamsByKey = Object.fromEntries(allTeams.map((entry) => [entry.key, entry])) as Record<string, TeamCatalogEntry>;

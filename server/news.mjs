@@ -1,17 +1,5 @@
 // Team dictionary with Korean names, English names, and aliases
 const teamMetaList = [
-  // KBO
-  { abbr: 'DSB', league: 'KBO', name: 'Doosan Bears', koName: '두산 베어스', shortKo: '두산', clubKo: '베어스' },
-  { abbr: 'HAN', league: 'KBO', name: 'Hanwha Eagles', koName: '한화 이글스', shortKo: '한화', clubKo: '이글스' },
-  { abbr: 'KIA', league: 'KBO', name: 'KIA Tigers', koName: 'KIA 타이거즈', shortKo: 'KIA', aliases: ['기아', '기아 타이거즈', '기아타이거즈'], clubKo: '타이거즈' },
-  { abbr: 'KIW', league: 'KBO', name: 'Kiwoom Heroes', koName: '키움 히어로즈', shortKo: '키움', clubKo: '히어로즈' },
-  { abbr: 'KTW', league: 'KBO', name: 'KT Wiz', koName: 'KT 위즈', shortKo: 'KT', aliases: ['kt wiz', '케이티'], clubKo: '위즈' },
-  { abbr: 'LGT', league: 'KBO', name: 'LG Twins', koName: 'LG 트윈스', shortKo: 'LG', aliases: ['엘지', '엘지 트윈스', '엘지트윈스'], clubKo: '트윈스' },
-  { abbr: 'LOT', league: 'KBO', name: 'Lotte Giants', koName: '롯데 자이언츠', shortKo: '롯데', clubKo: '자이언츠' },
-  { abbr: 'NCD', league: 'KBO', name: 'NC Dinos', koName: 'NC 다이노스', shortKo: 'NC', aliases: ['엔씨', '엔씨 다이노스'], clubKo: '다이노스' },
-  { abbr: 'SAM', league: 'KBO', name: 'Samsung Lions', koName: '삼성 라이온즈', shortKo: '삼성', clubKo: '라이온즈' },
-  { abbr: 'SSG', league: 'KBO', name: 'SSG Landers', koName: 'SSG 랜더스', shortKo: 'SSG', aliases: ['랜더스', '쓱'], clubKo: '랜더스' },
-
   // NBA
   { abbr: 'ATL', league: 'NBA', name: 'Atlanta Hawks', koName: '애틀랜타 호크스', shortKo: '애틀랜타', clubKo: '호크스' },
   { abbr: 'BOS', league: 'NBA', name: 'Boston Celtics', koName: '보스턴 셀틱스', shortKo: '보스턴', clubKo: '셀틱스' },
@@ -134,6 +122,10 @@ function normalizeTitle(title) {
     .trim();
 }
 
+function isEnglishArticle(article) {
+  return !/[가-힣]/.test(`${article.title || ''} ${article.source || ''}`);
+}
+
 function classifyArticle(title) {
   const text = title.toLowerCase();
   if (/injur|부상|라인업|lineup|결장|이탈/.test(text)) return 'Injury';
@@ -204,14 +196,7 @@ function isArticleRelevant(title, meta, rawTeam) {
     if (titleLower.includes(alias.toLowerCase())) return true;
   }
 
-  // 3. KBO: clubKo or shortKo
-  if (league === 'KBO') {
-    if (clubKo && titleLower.includes(clubKo.toLowerCase())) return true;
-    if (shortKo && titleLower.includes(shortKo.toLowerCase())) return true;
-    return false;
-  }
-
-  // 4. NBA / NFL: clubKo or shortKo
+  // 3. NBA / NFL aliases
   if (clubKo && titleLower.includes(clubKo.toLowerCase())) return true;
   if (shortKo && titleLower.includes(shortKo.toLowerCase())) return true;
 
@@ -272,23 +257,14 @@ export async function fetchTeamNews(team, league, queryOverride = '') {
   const meta = findTeamMeta(team, league);
   const feeds = [];
 
-  if (meta && meta.league === 'KBO') {
-    // KBO: Direct Korean news query for high precision
-    feeds.push(
-      `https://news.google.com/rss/search?q=${encodeURIComponent(meta.koName)}&hl=ko&gl=KR&ceid=KR:ko`,
-    );
-  } else if (meta && (meta.league === 'NBA' || meta.league === 'NFL')) {
-    // NBA / NFL: Korean news first, English feed as complement
-    feeds.push(
-      `https://news.google.com/rss/search?q=${encodeURIComponent(meta.koName)}&hl=ko&gl=KR&ceid=KR:ko`,
-    );
+  if (meta && (meta.league === 'NBA' || meta.league === 'NFL')) {
     feeds.push(
       `https://news.google.com/rss/search?q=${encodeURIComponent(meta.name)}&hl=en-US&gl=US&ceid=US:en`,
     );
   } else {
     const q = (queryOverride || team || '').trim();
     feeds.push(
-      `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=ko&gl=KR&ceid=KR:ko`,
+      `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`,
     );
   }
 
@@ -303,6 +279,7 @@ export async function fetchTeamNews(team, league, queryOverride = '') {
 
   for (const item of allArticles) {
     if (!item.title || !item.link) continue;
+    if (!isEnglishArticle(item)) continue;
 
     const normTitle = normalizeTitle(item.title);
     if (seenTitles.has(normTitle) || seenLinks.has(item.link)) {
@@ -320,7 +297,7 @@ export async function fetchTeamNews(team, league, queryOverride = '') {
       title: cleanTitle(item.title) || item.title,
       link: item.link,
       pubDate: item.pubDate,
-      source: item.source || (meta ? (meta.league === 'KBO' ? meta.koName : meta.name) : team),
+      source: item.source || meta?.name || team,
       category: classifyArticle(item.title),
       displayDate: formatDisplayDate(item.pubDate),
       timestamp: item.timestamp,

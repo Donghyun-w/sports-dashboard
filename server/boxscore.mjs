@@ -1,5 +1,3 @@
-import { fetchKboBoxScore } from './kbo.mjs';
-
 const ESPN_NBA_SUMMARY_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary';
 const ESPN_NFL_SUMMARY_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary';
 
@@ -785,35 +783,7 @@ export async function fetchUnifiedBoxScore({
 
   let result = null;
 
-  if (league === 'KBO') {
-    const rawKbo = await fetchKboBoxScore({
-      gameId: gameId || '',
-      seasonId,
-      seriesId,
-      gameDate,
-    }).catch(() => null);
-
-    if (rawKbo) {
-      result = {
-        league: 'KBO',
-        notes: rawKbo.notes ?? [],
-        categories: [
-          {
-            key: 'batting',
-            name: 'Batting',
-            awayTable: rawKbo.awayHitters,
-            homeTable: rawKbo.homeHitters,
-          },
-          {
-            key: 'pitching',
-            name: 'Pitching',
-            awayTable: rawKbo.awayPitchers,
-            homeTable: rawKbo.homePitchers,
-          },
-        ],
-      };
-    }
-  } else if (league === 'NBA') {
+  if (league === 'NBA') {
     result = await fetchEspnNbaBoxScore(gameId, homeTeam, awayTeam, gameDate, homeAbbr, awayAbbr);
   } else if (league === 'NFL') {
     result = await fetchEspnNflBoxScore(gameId, homeTeam, awayTeam, gameDate, homeAbbr, awayAbbr);

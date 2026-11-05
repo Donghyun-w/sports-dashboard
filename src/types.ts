@@ -1,4 +1,4 @@
-export type League = 'NBA' | 'NFL' | 'KBO';
+export type League = 'NBA' | 'NFL';
 export type MatchStatus = 'LIVE' | 'FINAL' | 'UPCOMING';
 export type ScheduleBucket = 'YESTERDAY' | 'TODAY' | 'UPCOMING';
 
@@ -57,19 +57,6 @@ export type LeagueBoxScore = {
   categories: BoxScoreCategory[];
 };
 
-export type KboBoxScoreTable = BoxScoreTable;
-
-export type KboBoxScore = {
-  notes: Array<{
-    label: string;
-    value: string;
-  }>;
-  awayHitters: KboBoxScoreTable;
-  homeHitters: KboBoxScoreTable;
-  awayPitchers: KboBoxScoreTable;
-  homePitchers: KboBoxScoreTable;
-};
-
 export type StandingRow = {
   rank: string;
   team: string;
@@ -101,5 +88,4 @@ export type LeagueStandingsData = {
 export type AllStandings = {
   NBA?: LeagueStandingsData | null;
   NFL?: LeagueStandingsData | null;
-  KBO?: LeagueStandingsData | null;
 };
