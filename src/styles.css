@@ -1490,6 +1490,64 @@ button {
     min-height: 0;
   }
 
+  .team-news-center {
+    margin-top: 14px;
+  }
+
+  .team-news-center .panel-header {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .team-news-center .panel-header > div,
+  .team-news-center .panel-header h2,
+  .news-card,
+  .news-card-meta,
+  .news-card h3,
+  .news-card p,
+  .news-source {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .team-news-center .panel-header h2 {
+    font-size: 1.2rem;
+    overflow-wrap: anywhere;
+  }
+
+  .team-news-center .league-badge {
+    flex: none;
+  }
+
+  .news-list {
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .news-card {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .news-card-meta {
+    align-items: flex-start;
+    gap: 7px;
+  }
+
+  .news-source {
+    overflow-wrap: anywhere;
+  }
+
+  .news-card h3 {
+    font-size: 0.9rem;
+    line-height: 1.42;
+    overflow-wrap: anywhere;
+  }
+
+  .news-card p {
+    font-size: 0.75rem;
+  }
+
   .detail-tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
