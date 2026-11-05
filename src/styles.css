@@ -47,9 +47,10 @@ button {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(340px, 0.9fr);
-  gap: 24px;
-  padding: 30px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 28px;
   border-radius: 30px;
   margin-bottom: 20px;
 }
@@ -70,8 +71,8 @@ button {
 }
 
 .hero h1 {
-  font-size: clamp(2.4rem, 4vw, 4.2rem);
-  line-height: 1.05;
+  font-size: clamp(2rem, 3vw, 3.25rem);
+  line-height: 1.1;
 }
 
 .hero-description {
@@ -83,8 +84,40 @@ button {
 }
 
 .hero-actions {
-  display: grid;
-  gap: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hero-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.hero-live span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.hero-live.live {
+  color: #72e6ae;
+  background: rgba(72, 194, 127, 0.13);
+}
+
+.hero-live.demo {
+  color: #ffd56a;
+  background: rgba(255, 213, 106, 0.13);
 }
 
 .favorite-strip {
@@ -1922,4 +1955,69 @@ body {
 
 .standing-row-favorite {
   background: #2d281c;
+}
+
+.loading-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.loading-card {
+  display: grid;
+  justify-items: center;
+  width: min(100%, 440px);
+  padding: 42px 32px;
+  border: 1px solid #2a2d33;
+  border-radius: 28px;
+  background: rgba(23, 25, 30, 0.96);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.loading-card .eyebrow {
+  margin: 18px 0 10px;
+}
+
+.loading-card h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 2.8rem);
+}
+
+.loading-card > p:not(.eyebrow) {
+  margin: 14px 0 0;
+  color: #a3a7b0;
+}
+
+.loading-spinner {
+  width: 38px;
+  height: 38px;
+  border: 3px solid #393d45;
+  border-top-color: #f3f4f6;
+  border-radius: 999px;
+  animation: loading-spin 0.8s linear infinite;
+}
+
+.loading-message {
+  margin-top: 14px;
+  color: #d9b76a;
+  font-size: 0.86rem;
+}
+
+.loading-retry {
+  margin-top: 22px;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: #e8eaed;
+  color: #16171a;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

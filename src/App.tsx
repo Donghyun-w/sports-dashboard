@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BoxScoreResponse, StandingsResponse } from './api';
-import { initialMatches } from './data';
 import { getLeagueTeams, getTeamByAbbr, getTeamByKey, resolveLeagueFromAbbr, type TeamCatalogEntry } from './teamCatalog';
 import { getTeamBrand, TeamEmblem } from './teamBranding';
 import type { AllStandings, BoxScoreCategory, BoxScoreTable, League, Match, LeagueBoxScore, ScheduleBucket } from './types';
@@ -12,7 +11,7 @@ type TeamViewTab = 'recent' | 'upcoming' | 'news';
 type ApiState = {
   matches: Match[];
   lastUpdated: string | null;
-  source: 'live' | 'demo';
+  source: 'live' | 'loading';
   message: string | null;
 };
 
@@ -61,13 +60,12 @@ function App() {
   const [teamViewTab, setTeamViewTab] = useState<TeamViewTab>('recent');
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [apiState, setApiState] = useState<ApiState>({
-    matches: initialMatches,
-    lastUpdated: '방금 전',
-    source: 'demo',
+    matches: [],
+    lastUpdated: null,
+    source: 'loading',
     message: null,
   });
   const [selectedMatchId, setSelectedMatchId] = useState<number>(0);
-  const [loading, setLoading] = useState(false);
   const [scheduleTeamKey, setScheduleTeamKey] = useState<string | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favoriteTeams, setFavoriteTeams] = useState<string[]>(() => {
@@ -119,7 +117,7 @@ function App() {
     void fetchScoreboard();
     void fetchStandings();
     const timer = window.setInterval(() => {
-      void fetchScoreboard(true);
+      void fetchScoreboard();
     }, 30000);
     return () => window.clearInterval(timer);
   }, []);
@@ -464,15 +462,11 @@ function App() {
     selectedMatch?.startDate,
   ]);
 
-  async function fetchScoreboard(isBackground = false) {
-    if (!isBackground) {
-      setLoading(true);
-    }
-
+  async function fetchScoreboard() {
     try {
       const response = await fetchApi('/api/scoreboard');
       const text = await response.text();
-      let payload: ApiState | null = null;
+      let payload: { matches?: Match[]; lastUpdated?: string | null; source?: 'live' | 'demo'; message?: string | null } | null = null;
       try {
         payload = JSON.parse(text);
       } catch {
@@ -485,26 +479,22 @@ function App() {
 
       setApiState((current) => {
         const cachedMatches = current.source === 'live' ? current.matches : [];
-        const matches = mergeLiveMatches(mergeScoreboardMatches(payload.matches ?? [], cachedMatches));
+        const matches = mergeScoreboardMatches(payload.matches ?? [], cachedMatches);
 
         return {
           matches,
-          lastUpdated: payload.lastUpdated,
-          source: payload.source === 'live' || cachedMatches.length > 0 ? 'live' : payload.source,
-          message: payload.message,
+          lastUpdated: payload.lastUpdated ?? null,
+          source: matches.length > 0 ? 'live' : 'loading',
+          message: payload.message ?? null,
         };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
       setApiState((current) => ({
         ...current,
-        matches: current.matches.length > 0 ? current.matches : initialMatches,
+        source: current.matches.length > 0 ? 'live' : 'loading',
         message,
       }));
-    } finally {
-      if (!isBackground) {
-        setLoading(false);
-      }
     }
   }
 
@@ -542,16 +532,33 @@ function App() {
     });
   }
 
+  if (apiState.source !== 'live') {
+    return (
+      <main className="loading-shell" aria-live="polite" aria-busy="true">
+        <section className="loading-card">
+          <span className="loading-spinner" aria-hidden="true" />
+          <p className="eyebrow">LIVE SPORTS CENTER</p>
+          <h1>Sports Dashboard</h1>
+          <p>실시간 경기 데이터를 불러오는 중입니다.</p>
+          {apiState.message ? (
+            <>
+              <span className="loading-message">{apiState.message}</span>
+              <button className="loading-retry" onClick={() => void fetchScoreboard()}>
+                다시 시도
+              </button>
+            </>
+          ) : null}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <div className="desktop-shell">
       <header className="hero">
         <div className="hero-copy">
           <p className="eyebrow">LIVE SPORTS CENTER</p>
-          <h1>NBA · NFL · KBO Scores Dashboard</h1>
-          <p className="hero-description">
-            NBA, NFL, KBO 경기와 함께 팀별 탭에서 최근 7경기, 예정된 7경기, 관련 뉴스 기사까지 확인할 수 있게
-            확장했습니다.
-          </p>
+          <h1>Sports Dashboard</h1>
         </div>
 
         <div className="hero-actions">
@@ -570,13 +577,10 @@ function App() {
             ))}
           </div>
 
-          <div className="status-card">
-            <span className={`status-chip ${apiState.source}`}>{apiState.source === 'live' ? 'Live data' : 'Demo mode'}</span>
-            <p>{apiState.lastUpdated ? `Updated ${apiState.lastUpdated}` : apiState.message}</p>
-            <button className="refresh-button" onClick={() => void fetchScoreboard()} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh Scores'}
-            </button>
-          </div>
+          <span className={`hero-live ${apiState.source}`}>
+            <span aria-hidden="true" />
+            LIVE
+          </span>
         </div>
       </header>
 
@@ -1295,21 +1299,6 @@ function StatBar({
       ) : null}
     </div>
   );
-}
-
-function mergeLiveMatches(liveMatches: Match[]): Match[] {
-  const leagues: League[] = ['NBA', 'NFL', 'KBO'];
-  const result: Match[] = [...liveMatches];
-
-  for (const league of leagues) {
-    const hasLiveForLeague = liveMatches.some((match) => match.league === league);
-    if (!hasLiveForLeague) {
-      const fallbackMatches = initialMatches.filter((seed: Match) => seed.league === league);
-      result.push(...fallbackMatches);
-    }
-  }
-
-  return result;
 }
 
 function mergeScoreboardMatches(freshMatches: Match[], cachedMatches: Match[]): Match[] {
