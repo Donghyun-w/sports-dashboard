@@ -75,6 +75,18 @@ button {
   line-height: 1.1;
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: clamp(44px, 4vw, 58px);
+  height: clamp(44px, 4vw, 58px);
+  flex: none;
+}
+
 .hero-description {
   max-width: 760px;
   margin: 16px 0 0;
@@ -1982,6 +1994,15 @@ body {
 .loading-card h1 {
   margin: 0;
   font-size: clamp(2rem, 6vw, 2.8rem);
+}
+
+.loading-brand {
+  gap: 12px;
+}
+
+.loading-brand .brand-logo {
+  width: 46px;
+  height: 46px;
 }
 
 .loading-card > p:not(.eyebrow) {

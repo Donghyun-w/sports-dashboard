@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BoxScoreResponse, StandingsResponse } from './api';
+import scorelineLogo from './assets/scoreline-logo.svg';
 import { getLeagueTeams, getTeamByAbbr, getTeamByKey, resolveLeagueFromAbbr, type TeamCatalogEntry } from './teamCatalog';
 import { getTeamBrand, TeamEmblem } from './teamBranding';
 import type { AllStandings, BoxScoreCategory, BoxScoreTable, League, Match, LeagueBoxScore, ScheduleBucket } from './types';
@@ -498,7 +499,10 @@ function App() {
         <section className="loading-card">
           <span className="loading-spinner" aria-hidden="true" />
           <p className="eyebrow">LIVE SPORTS CENTER</p>
-          <h1>Sports Dashboard</h1>
+          <div className="brand-lockup loading-brand">
+            <img className="brand-logo" src={scorelineLogo} alt="Scoreline" />
+            <h1>Scoreline</h1>
+          </div>
           <p>실시간 경기 데이터를 불러오는 중입니다.</p>
           {apiState.message ? (
             <>
@@ -517,8 +521,10 @@ function App() {
     <div className="desktop-shell">
       <header className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">LIVE SPORTS CENTER</p>
-          <h1>Sports Dashboard</h1>
+          <div className="brand-lockup">
+            <img className="brand-logo" src={scorelineLogo} alt="Scoreline" />
+            <h1>Scoreline</h1>
+          </div>
         </div>
 
         <div className="hero-actions">
