@@ -38,6 +38,23 @@ async function fetchJson(path, params, apiKey) {
   return response.json();
 }
 
+async function fetchAllPages(path, params, apiKey, maxPages = 4) {
+  const pages = [];
+  let cursor;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const payload = await fetchJson(path, { ...params, cursor }, apiKey);
+    pages.push(...(payload.data ?? []));
+
+    cursor = payload.meta?.next_cursor;
+    if (!cursor) {
+      break;
+    }
+  }
+
+  return { data: pages };
+}
+
 async function fetchEspnScoreboardEvents(scoreboardUrl, offsets = [0]) {
   try {
     const requests = offsets.map(async (offset) => {
@@ -68,7 +85,7 @@ async function fetchEspnScoreboardEvents(scoreboardUrl, offsets = [0]) {
 }
 
 export async function fetchEspnNbaScoreboard() {
-  return fetchEspnScoreboardEvents(ESPN_NBA_SCOREBOARD_URL, [0, 1]);
+  return fetchEspnScoreboardEvents(ESPN_NBA_SCOREBOARD_URL, [-1, 0, 1]);
 }
 
 export async function fetchEspnNflScoreboard() {
@@ -115,10 +132,10 @@ export async function fetchNbaGames(apiKey, today = new Date()) {
   if (!apiKey) {
     return { data: [] };
   }
-  const startDate = toLocalDateString(addDays(today, -14));
-  const endDate = toLocalDateString(addDays(today, 14));
+  const startDate = toLocalDateString(addDays(today, -7));
+  const endDate = toLocalDateString(addDays(today, 21));
 
-  return fetchJson('/v1/games', { start_date: startDate, end_date: endDate, per_page: 100 }, apiKey);
+  return fetchAllPages('/v1/games', { start_date: startDate, end_date: endDate, per_page: 100 }, apiKey);
 }
 
 export async function fetchNflGames(apiKey, today = new Date()) {

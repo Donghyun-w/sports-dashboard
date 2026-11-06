@@ -5,6 +5,7 @@ import { fetchUnifiedStandings } from './standings.mjs';
 import { transformEspnEvents, transformNbaGames, transformNflGames } from './transformers.mjs';
 
 const cachedMatchesByLeague = new Map();
+const NBA_ABBR_ALIASES = { GS: 'GSW', NO: 'NOP', NY: 'NYK', SA: 'SAS', UTAH: 'UTA', WSH: 'WAS' };
 
 function buildLastUpdated() {
   return new Intl.DateTimeFormat('en-US', {
@@ -20,7 +21,9 @@ function buildLastUpdated() {
 function dedupeMatches(matches) {
   const map = new Map();
   matches.forEach((m) => {
-    const key = `${m.league}:${m.startDate?.slice(0, 10)}:${m.homeAbbr}:${m.awayAbbr}`;
+    const homeAbbr = m.league === 'NBA' ? (NBA_ABBR_ALIASES[m.homeAbbr] ?? m.homeAbbr) : m.homeAbbr;
+    const awayAbbr = m.league === 'NBA' ? (NBA_ABBR_ALIASES[m.awayAbbr] ?? m.awayAbbr) : m.awayAbbr;
+    const key = `${m.league}:${m.startDate?.slice(0, 10)}:${homeAbbr}:${awayAbbr}`;
     if (!map.has(key)) {
       map.set(key, m);
     }
@@ -28,17 +31,34 @@ function dedupeMatches(matches) {
   return Array.from(map.values());
 }
 
+function isCacheWindowMatch(match) {
+  if (!match.startDate) return false;
+
+  const formatDay = (date) => new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(date));
+  const target = new Date(formatDay(match.startDate));
+  const today = new Date(formatDay(new Date()));
+  const dayDiff = Math.round((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+
+  return dayDiff >= -7 && dayDiff <= 21;
+}
+
 function retainCachedLeagueMatches(matches) {
   return ['NBA', 'NFL'].flatMap((league) => {
     const freshMatches = matches.filter((match) => match.league === league);
     const cachedMatches = cachedMatchesByLeague.get(league) ?? [];
-    const stableMatches = dedupeMatches([...freshMatches, ...cachedMatches]);
 
     if (freshMatches.length > 0) {
+      const stableMatches = dedupeMatches([...freshMatches, ...cachedMatches]).filter(isCacheWindowMatch);
       cachedMatchesByLeague.set(league, stableMatches);
+      return stableMatches;
     }
 
-    return stableMatches;
+    return cachedMatches.filter(isCacheWindowMatch);
   });
 }
 

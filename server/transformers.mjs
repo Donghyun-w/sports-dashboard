@@ -66,6 +66,21 @@ function normalizeStatus(status) {
   return 'UPCOMING';
 }
 
+function normalizeTeamAbbreviation(league, abbreviation) {
+  if (league !== 'NBA') return abbreviation;
+
+  const aliases = {
+    GS: 'GSW',
+    NO: 'NOP',
+    NY: 'NYK',
+    SA: 'SAS',
+    UTAH: 'UTA',
+    WSH: 'WAS',
+  };
+
+  return aliases[abbreviation] ?? abbreviation;
+}
+
 function buildNbaPeriod(game) {
   const normalizedStatus = normalizeStatus(game.status);
 
@@ -130,8 +145,8 @@ export function transformEspnEvents(events, league) {
       const awayScore = Number(away?.score || 0);
       const homeTeam = home?.team?.displayName || home?.team?.name || 'Home';
       const awayTeam = away?.team?.displayName || away?.team?.name || 'Away';
-      const homeAbbr = home?.team?.abbreviation || '';
-      const awayAbbr = away?.team?.abbreviation || '';
+      const homeAbbr = normalizeTeamAbbreviation(league, home?.team?.abbreviation || '');
+      const awayAbbr = normalizeTeamAbbreviation(league, away?.team?.abbreviation || '');
       const homeRecord = home?.records?.[0]?.summary || '';
       const awayRecord = away?.records?.[0]?.summary || '';
       const venue = comp?.venue?.fullName || `${homeTeam} home game`;

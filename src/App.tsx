@@ -139,16 +139,22 @@ function App() {
   const filteredMatches = useMemo(() => {
     const scopedTeam = scheduleTeamKey ? getTeamByKey(scheduleTeamKey) : null;
 
-    return apiState.matches
+    const scopedMatches = apiState.matches
       .filter((match) => {
         const leagueOk = leagueFilter === 'ALL' || match.league === leagueFilter;
-        const dateOk = matchesScheduleBucket(match, dateFilter);
         const favoriteOk = favoritesOnly ? isFavoriteMatch(match, favoriteTeams) : true;
         const teamOk = scopedTeam
           ? match.league === scopedTeam.league && (match.homeAbbr === scopedTeam.abbr || match.awayAbbr === scopedTeam.abbr)
           : true;
-        return leagueOk && dateOk && favoriteOk && teamOk;
-      })
+        return leagueOk && favoriteOk && teamOk;
+      });
+
+    const dateMatches = scopedMatches.filter((match) => matchesScheduleBucket(match, dateFilter));
+    const visibleMatches = dateFilter === 'YESTERDAY' && dateMatches.length === 0
+      ? mostRecentCompletedDayMatches(scopedMatches)
+      : dateMatches;
+
+    return visibleMatches
       .sort((left, right) => {
         const leftFavorite = isFavoriteMatch(left, favoriteTeams);
         const rightFavorite = isFavoriteMatch(right, favoriteTeams);
@@ -1266,8 +1272,22 @@ function matchesScheduleBucket(match: Match, bucket: ScheduleBucket) {
   const diff = getDayDiff(match.startDate, new Date().toISOString());
 
   if (bucket === 'TODAY') return diff === 0;
-  if (bucket === 'YESTERDAY') return diff <= -1;
+  if (bucket === 'YESTERDAY') return diff === -1;
   return diff >= 1;
+}
+
+function mostRecentCompletedDayMatches(matches: Match[]) {
+  const completedMatches = matches
+    .filter((match) => match.status === 'FINAL' && getDayDiff(match.startDate, new Date().toISOString()) < 0)
+    .sort((left, right) => String(right.startDate).localeCompare(String(left.startDate)));
+  const latestMatch = completedMatches[0];
+
+  if (!latestMatch?.startDate) {
+    return [];
+  }
+
+  const latestDay = toSeoulDayKey(latestMatch.startDate);
+  return completedMatches.filter((match) => match.startDate && toSeoulDayKey(match.startDate) === latestDay);
 }
 
 function resolveMatchBucket(match: Match): ScheduleBucket {
